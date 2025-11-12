@@ -1,0 +1,21 @@
+[package]
+name = "yid-sdk"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libm = "0.2.15"
+chrono = { version = "0.4.41", default-features = false }
+icu_calendar = { version = "2.0.3", default-features = false, features = [
+    "unstable",
+] }
+num_enum = { version = "0.7.5", default-features = false }
+tinystr = { version = "0.8.2", default-features = false }
+
+[dev-dependencies]
+proptest = "1.9.0"
+chrono-tz = { version = "0.10.4", default-features = false }
+j4rs = { git = "https://github.com/astonbitecode/j4rs", rev = "478273" }
+tinystr = "0.8.2"
+num_enum = "0.7.5"
+rand = "0.8.5"
