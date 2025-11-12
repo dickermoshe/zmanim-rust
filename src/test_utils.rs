@@ -15,16 +15,8 @@ pub mod jni {
     pub fn init_jvm() -> Jvm {
         // Ensure the shared JVM exists (creates it on first call).
         JVM_INIT.call_once(|| {
-            // Determine the base path for j4rs (where jassets directory is located)
-            // By default, j4rs looks in CARGO_TARGET_DIR, which is typically target/debug for tests
-            let base_path =
-                std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target/debug".to_string());
-
             let _ = JvmBuilder::new()
-                .with_base_path(&base_path)
-                .classpath_entry(ClasspathEntry::new(
-                    "./kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar",
-                ))
+                .classpath_entry(ClasspathEntry::new("zmanim-2.6.0-SNAPSHOT.jar"))
                 .build()
                 .unwrap();
         });

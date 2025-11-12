@@ -31,6 +31,9 @@ jobs:
         run: |
           mkdir jassets
           cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar jassets/
+          cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar .
+          cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar ./target/debug/
+
       - name: Build Rust project
         run: cargo build
       - name: Run tests
