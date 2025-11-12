@@ -21,6 +21,8 @@ jobs:
       with:
         distribution: 'temurin' # See 'Supported distributions' for available options
         java-version: '17'
+    - name: Check Java version
+      run: java --version
     - name: Run tests
       run: cargo test --verbose
   formatting:
