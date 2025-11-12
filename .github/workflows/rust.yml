@@ -26,7 +26,7 @@ jobs:
         run: java --version
       - name: Build Java submodule
         working-directory: ./kosher-java
-        run: mvn package -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
+        run: mvn package `-Dmaven.test.skip `-Dmaven.javadoc.skip=true
       - name: Build Rust project
         run: cargo build
       - name: Run tests
