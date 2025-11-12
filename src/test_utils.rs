@@ -16,7 +16,9 @@ pub mod jni {
         // Ensure the shared JVM exists (creates it on first call).
         JVM_INIT.call_once(|| {
             let _ = JvmBuilder::new()
-                .classpath_entry(ClasspathEntry::new("zmanim-2.6.0-SNAPSHOT.jar"))
+                .classpath_entry(ClasspathEntry::new(
+                    "./kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar",
+                ))
                 .build()
                 .unwrap();
         });
