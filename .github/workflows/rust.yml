@@ -33,6 +33,10 @@ jobs:
           cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar jassets/
           cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar .
           cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar ./target/debug/
+          mkdir -p ./target/debug/deps/jassets/
+          cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar ./target/debug/deps/jassets/
+      - name: List all files recursively
+        run: find . -type f
 
       - name: Build Rust project
         run: cargo build
