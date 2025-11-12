@@ -23,6 +23,9 @@ jobs:
         java-version: '17'
     - name: Check Java version
       run: java --version
+    - name: Build Java submodule
+      working-directory: ./kosher-java
+      run: mvn package -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
     - name: Run tests
       run: cargo test --verbose
   formatting:
