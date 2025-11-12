@@ -27,6 +27,10 @@ jobs:
       - name: Build Java submodule
         working-directory: ./kosher-java
         run: mvn package -Dmaven.test.skip=true -Dmaven.javadoc.skip=true
+      - name: Copy JARs to exec directory
+        run: |
+          mkdir jassets
+          cp kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar jassets/
       - name: Build Rust project
         run: cargo build
       - name: Run tests

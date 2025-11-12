@@ -3,11 +3,6 @@ name = "yid-sdk"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-name = "yid_sdk"
-crate-type = ["rlib", "cdylib"]
-path = "src/lib.rs"
-
 
 [dependencies]
 libm = "0.2.15"
@@ -25,6 +20,3 @@ j4rs = { git = "https://github.com/astonbitecode/j4rs", rev = "478273" }
 tinystr = "0.8.2"
 num_enum = "0.7.5"
 rand = "0.8.5"
-
-[build-dependencies]
-fs_extra = "1.3"

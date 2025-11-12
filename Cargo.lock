@@ -879,7 +879,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
- "fs_extra",
  "icu_calendar",
  "j4rs",
  "libm",
