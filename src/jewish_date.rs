@@ -53,9 +53,16 @@ pub trait JewishDateTrait: Sized {
     fn get_molad_as_date(&self) -> Option<impl JewishDateTrait>;
 
     fn get_molad(&self) -> Option<MoladData>;
+    fn get_jewish_calendar_elapsed_days(year: i64) -> i64;
+    fn get_days_in_jewish_year_static(year: i64) -> i64;
+    fn get_last_day_of_gregorian_month(month: i64, year: i64) -> i64;
 }
 
 impl JewishDateTrait for JewishDate {
+    fn get_days_in_jewish_year_static(year: i64) -> i64 {
+        JewishDate::get_jewish_calendar_elapsed_days(year + 1)
+            - JewishDate::get_jewish_calendar_elapsed_days(year)
+    }
     fn get_jewish_month(&self) -> JewishMonth {
         let month_code = self.get_hebrew_date().month().formatting_code.0;
         match month_code.as_str() {
@@ -262,6 +269,27 @@ impl JewishDateTrait for JewishDate {
     fn get_jewish_year(&self) -> i64 {
         self.get_hebrew_date().era_year().year.into()
     }
+    fn get_jewish_calendar_elapsed_days(year: i64) -> i64 {
+        let chalakim_since =
+            JewishDate::get_chalakim_since_molad_tohu_static(year, JewishMonth::Tishrei.into());
+        let molad_day = (chalakim_since / _CHALAKIM_PER_DAY) as i64;
+        let molad_parts = (chalakim_since - molad_day as i64 * _CHALAKIM_PER_DAY) as i64;
+
+        JewishDate::add_dechiyos(year, molad_day, molad_parts)
+    }
+    fn get_last_day_of_gregorian_month(month: i64, year: i64) -> i64 {
+        match month {
+            2 => {
+                if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
+                    29
+                } else {
+                    28
+                }
+            }
+            4 | 6 | 9 | 11 => 30,
+            _ => 31,
+        }
+    }
 }
 
 impl JewishDate {
@@ -269,7 +297,7 @@ impl JewishDate {
         &self.hebrew_date
     }
 
-    fn get_gregorian_date(&self) -> Date<Gregorian> {
+    pub fn get_gregorian_date(&self) -> Date<Gregorian> {
         self.hebrew_date.to_calendar(Gregorian)
     }
     fn get_chalakim_since_molad_tohu_static(year: i64, month: i64) -> i64 {
@@ -338,7 +366,7 @@ impl JewishDate {
         elapsed_days
     }
 
-    fn is_jewish_leap_year_static(year: i64) -> bool {
+    pub fn is_jewish_leap_year_static(year: i64) -> bool {
         let year_in_cycle = ((year - 1) % 19) + 1;
         matches!(year_in_cycle, 3 | 6 | 8 | 11 | 14 | 17 | 19)
     }
@@ -349,19 +377,8 @@ impl JewishDate {
             12
         }
     }
-    pub fn get_jewish_calendar_elapsed_days(year: i64) -> i64 {
-        let chalakim_since =
-            JewishDate::get_chalakim_since_molad_tohu_static(year, JewishMonth::Tishrei.into());
-        let molad_day = (chalakim_since / _CHALAKIM_PER_DAY) as i64;
-        let molad_parts = (chalakim_since - molad_day as i64 * _CHALAKIM_PER_DAY) as i64;
 
-        JewishDate::add_dechiyos(year, molad_day, molad_parts)
-    }
-    fn get_days_in_jewish_year_static(year: i64) -> i64 {
-        JewishDate::get_jewish_calendar_elapsed_days(year + 1)
-            - JewishDate::get_jewish_calendar_elapsed_days(year)
-    }
-    fn get_days_in_jewish_month_static(month: i64, year: i64) -> i64 {
+    pub fn get_days_in_jewish_month_static(month: i64, year: i64) -> i64 {
         match month.try_into().unwrap() {
             JewishMonth::Iyar | JewishMonth::Tammuz | JewishMonth::Elul | JewishMonth::Teves => 29,
             JewishMonth::Cheshvan => {
@@ -400,19 +417,6 @@ impl JewishDate {
         abs_date + 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
     }
 
-    fn get_last_day_of_gregorian_month(month: i64, year: i64) -> i64 {
-        match month {
-            2 => {
-                if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
-                    29
-                } else {
-                    28
-                }
-            }
-            4 | 6 | 9 | 11 => 30,
-            _ => 31,
-        }
-    }
     fn abs_date_to_date(abs_date: i64) -> Option<Date<Gregorian>> {
         let mut year: i64 = abs_date / 366;
         while abs_date >= JewishDate::gregorian_date_to_abs_date(year + 1, 1, 1) {

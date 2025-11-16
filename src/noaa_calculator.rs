@@ -47,21 +47,12 @@ pub trait NOAACalculatorTrait {
     ) -> f64;
 }
 
-impl Default for NOAACalculator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl NOAACalculator {
-    pub fn new() -> Self {
-        Self
-    }
     fn _get_elevation_adjustment(&self, elevation_meters: f64) -> f64 {
         acos(_EARTH_RADIUS / (_EARTH_RADIUS + (elevation_meters / 1000.0))).to_degrees()
     }
 
-    fn _get_julian_day<Tz: TimeZone>(&self, date_time: &DateTime<Tz>) -> f64 {
+    pub fn _get_julian_day<Tz: TimeZone>(&self, date_time: &DateTime<Tz>) -> f64 {
         let mut year: i64 = date_time.year().into();
         let mut month: i64 = date_time.month() as i64;
         let day: i64 = date_time.day() as i64;

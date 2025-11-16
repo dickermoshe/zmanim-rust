@@ -11,8 +11,8 @@ pub mod jni {
         astronomical_calendar::AstronomicalCalendar,
         constants::JewishMonth,
         geolocation::GeoLocation,
+        jewish_calendar::JewishCalendar,
         jewish_date::{JewishDate, JewishDateTrait},
-        noaa_calculator::NOAACalculator,
         zmanim_calendar::ZmanimCalendar,
     };
     pub static DEFAULT_TEST_ITERATIONS: i32 = 1000;
@@ -172,8 +172,7 @@ pub mod jni {
     ) -> Option<(AstronomicalCalendar<chrono_tz::Tz>, Instance, String)> {
         let (date_time, java_calendar, geo_location, java_geo_location, message) =
             create_date_times_with_geolocation(jvm)?;
-        let astronomical_calendar =
-            AstronomicalCalendar::new(date_time, geo_location, NOAACalculator::new());
+        let astronomical_calendar = AstronomicalCalendar::new(date_time, geo_location);
         let java_astronomical_calendar = jvm
             .create_instance(
                 "com.kosherjava.zmanim.AstronomicalCalendar",
@@ -198,7 +197,7 @@ pub mod jni {
         let use_astronomical_chatzos = rand::thread_rng().gen_bool(0.5);
         let use_astronomical_chatzos_for_other_zmanim = rand::thread_rng().gen_bool(0.5);
         let zmanim_calendar = ZmanimCalendar::new(
-            AstronomicalCalendar::new(date_time, geo_location, NOAACalculator::new()),
+            AstronomicalCalendar::new(date_time, geo_location),
             candle_lighting_offset,
             use_astronomical_chatzos,
             use_astronomical_chatzos_for_other_zmanim,
@@ -357,7 +356,6 @@ pub mod jni {
                     if let J4RsError::JavaError(message) = &err {
                         // We will ignore the error if it is because the month is not between 1 and 12
                         if message.contains("The Jewish month has to be between 1 and 12") {
-                            println!("{}", message);
                             return None;
                         } else {
                             panic!("{}", err);
@@ -385,6 +383,183 @@ pub mod jni {
             return Some((jewish_date, java_jewish_date, message));
         }
     }
+
+    pub fn create_jewish_calendars(jvm: &Jvm) -> Option<(JewishCalendar, Instance, String)> {
+        let use_gregorian_date = rand::thread_rng().gen_bool(0.5);
+        let in_israel = rand::thread_rng().gen_bool(0.5);
+        let is_mukaf_choma = rand::thread_rng().gen_bool(0.5);
+        let use_modern_holidays = rand::thread_rng().gen_bool(0.5);
+        if use_gregorian_date {
+            let (date_time, _, _, _) = random_date_time();
+
+            let message = format!(
+                "year: {}, month: {}, day: {}, in_israel: {}, is_mukaf_choma: {}, use_modern_holidays: {}",
+                date_time.year(),
+                date_time.month(),
+                date_time.day(),
+                in_israel,
+                is_mukaf_choma,
+                use_modern_holidays,
+            );
+            let year_arg = InvocationArg::try_from(date_time.year() as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let month_arg = InvocationArg::try_from(date_time.month() as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let day_arg = InvocationArg::try_from(date_time.day() as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let jewish_date_instance = jvm
+                .invoke_static("java.time.LocalDate", "of", &[year_arg, month_arg, day_arg])
+                .unwrap();
+            let jewish_calendar = JewishCalendar::from_gregorian_date(
+                date_time.year() as i64,
+                date_time.month() as u8,
+                date_time.day() as u8,
+                in_israel,
+                is_mukaf_choma,
+                use_modern_holidays,
+            );
+            let java_jewish_calendar = jvm
+                .create_instance(
+                    "com.kosherjava.zmanim.hebrewcalendar.JewishCalendar",
+                    &[InvocationArg::from(jewish_date_instance)],
+                )
+                .ok();
+
+            assert_eq!(
+                jewish_calendar.is_some(),
+                java_jewish_calendar.is_some(),
+                "{}",
+                message
+            );
+            if jewish_calendar.is_none() {
+                return None;
+            }
+            let jewish_calendar = jewish_calendar.unwrap();
+            let java_jewish_calendar = java_jewish_calendar.unwrap();
+            let in_israel_arg = InvocationArg::try_from(in_israel)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let is_mukaf_choma_arg = InvocationArg::try_from(is_mukaf_choma)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let use_modern_holidays_arg = InvocationArg::try_from(use_modern_holidays)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            jvm.invoke(&java_jewish_calendar, "setInIsrael", &[in_israel_arg])
+                .unwrap();
+            jvm.invoke(
+                &java_jewish_calendar,
+                "setIsMukafChoma",
+                &[is_mukaf_choma_arg],
+            )
+            .unwrap();
+            jvm.invoke(
+                &java_jewish_calendar,
+                "setUseModernHolidays",
+                &[use_modern_holidays_arg],
+            )
+            .unwrap();
+            return Some((jewish_calendar, java_jewish_calendar, message));
+        } else {
+            let (year, month, day) = random_hebrew_date();
+            let message = format!(
+                "year: {}, month: {}, day: {}, in_israel: {}, is_mukaf_choma: {}, use_modern_holidays: {}",
+                year, month, day, in_israel, is_mukaf_choma, use_modern_holidays,
+            );
+            let jewish_calendar = JewishCalendar::from_hebrew_date(
+                year,
+                JewishMonth::try_from(month).unwrap(),
+                day,
+                in_israel,
+                is_mukaf_choma,
+                use_modern_holidays,
+            );
+            let year_arg = InvocationArg::try_from(year as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let month_arg = InvocationArg::try_from(month as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let day_arg = InvocationArg::try_from(day as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let instance = jvm.create_instance(
+                "com.kosherjava.zmanim.hebrewcalendar.JewishCalendar",
+                &[year_arg, month_arg, day_arg],
+            );
+
+            let java_jewish_calendar = match instance {
+                Ok(instance) => Some(instance),
+                Err(err) => {
+                    if let J4RsError::JavaError(message) = &err {
+                        // We will ignore the error if it is because the month is not between 1 and 12
+                        if message.contains("The Jewish month has to be between 1 and 12") {
+                            return None;
+                        } else {
+                            panic!("{}", err);
+                        }
+                    }
+                    panic!("{}", err);
+                }
+            };
+            // Java will gracefully handle the case of a day of 30 for a month that only has 29 days,
+            // and will set it to the last day of the month, whereas Rust will not.
+            if jewish_calendar.is_none() && java_jewish_calendar.is_some() && day == 30_i64 {
+                return None;
+            }
+            assert_eq!(
+                jewish_calendar.is_some(),
+                java_jewish_calendar.is_some(),
+                "{}",
+                message
+            );
+            if jewish_calendar.is_none() {
+                return None;
+            }
+            let jewish_calendar = jewish_calendar.unwrap();
+            let java_jewish_calendar = java_jewish_calendar.unwrap();
+            let in_israel_arg = InvocationArg::try_from(in_israel)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let is_mukaf_choma_arg = InvocationArg::try_from(is_mukaf_choma)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let use_modern_holidays_arg = InvocationArg::try_from(use_modern_holidays)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            jvm.invoke(&java_jewish_calendar, "setInIsrael", &[in_israel_arg])
+                .unwrap();
+            jvm.invoke(
+                &java_jewish_calendar,
+                "setIsMukafChoma",
+                &[is_mukaf_choma_arg],
+            )
+            .unwrap();
+            jvm.invoke(
+                &java_jewish_calendar,
+                "setUseModernHolidays",
+                &[use_modern_holidays_arg],
+            )
+            .unwrap();
+            return Some((jewish_calendar, java_jewish_calendar, message));
+        }
+    }
+
     pub fn create_java_noaa_calculator(jvm: &Jvm) -> Instance {
         jvm.create_instance(
             "com.kosherjava.zmanim.util.NOAACalculator",

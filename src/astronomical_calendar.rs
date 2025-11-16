@@ -16,15 +16,11 @@ pub struct AstronomicalCalendar<Tz: TimeZone> {
 }
 
 impl<Tz: TimeZone> AstronomicalCalendar<Tz> {
-    pub fn new(
-        date_time: DateTime<Tz>,
-        geo_location: GeoLocation,
-        noaa_calculator: NOAACalculator,
-    ) -> Self {
+    pub fn new(date_time: DateTime<Tz>, geo_location: GeoLocation) -> Self {
         Self {
             date_time,
             geo_location,
-            noaa_calculator,
+            noaa_calculator: NOAACalculator,
         }
     }
     fn get_adjusted_date_time(&self, date_time: &DateTime<Tz>) -> DateTime<Tz> {

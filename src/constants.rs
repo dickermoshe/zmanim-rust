@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 /// Julian Day for the J2000.0 epoch (2000-01-01 12:00 TT); common reference
@@ -97,11 +98,14 @@ pub static _CHALAKIM_MOLAD_TOHU: i64 = 31524;
 ///
 pub static _JEWISH_EPOCH: i64 = -1373429;
 ///
-pub static _BAVLI_DAF_YOMI_START_DAY: i64 = -1461369600000;
+pub static _BAVLI_DAF_YOMI_START_DAY: DateTime<Utc> =
+    DateTime::from_timestamp_millis(-1461369600000).unwrap();
 ///
-pub static _BAVLI_SHEKALIM_CHANGE_DAY: i64 = 172800000000;
+pub static _BAVLI_SHEKALIM_CHANGE_DAY: DateTime<Utc> =
+    DateTime::from_timestamp_millis(172800000000).unwrap();
 ///
-pub static _YERUSHALMI_DAF_YOMI_START_DAY: i64 = 318297600000;
+pub static _YERUSHALMI_DAF_YOMI_START_DAY: DateTime<Utc> =
+    DateTime::from_timestamp_millis(318297600000).unwrap();
 ///
 pub static _YERUSHALMI_LENGTH: i64 = 1554;
 
