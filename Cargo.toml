@@ -14,6 +14,7 @@ num_enum = { version = "0.7.5", default-features = false }
 tinystr = { version = "0.8.2", default-features = false }
 
 [dev-dependencies]
+proptest = "1.9.0"
 chrono-tz = { version = "0.10.4", default-features = false }
 j4rs = { git = "https://github.com/astonbitecode/j4rs", rev = "478273" }
 tinystr = "0.8.2"

@@ -5,7 +5,58 @@ use libm::{acos, asin, cos, floor, fmod, sin, tan};
 /// TODO ADD DOCS
 pub struct NOAACalculator;
 
+pub trait NOAACalculatorTrait {
+    fn get_utc_noon<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &GeoLocation,
+    ) -> f64;
+
+    fn get_utc_midnight<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &GeoLocation,
+    ) -> f64;
+
+    fn get_utc_sunrise<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &GeoLocation,
+        zenith: f64,
+        adjust_for_elevation: bool,
+    ) -> Option<f64>;
+
+    fn get_utc_sunset<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &GeoLocation,
+        zenith: f64,
+        adjust_for_elevation: bool,
+    ) -> Option<f64>;
+
+    fn get_solar_elevation<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &GeoLocation,
+    ) -> f64;
+
+    fn get_solar_azimuth<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &GeoLocation,
+    ) -> f64;
+}
+
+impl Default for NOAACalculator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NOAACalculator {
+    pub fn new() -> Self {
+        Self
+    }
     fn _get_elevation_adjustment(&self, elevation_meters: f64) -> f64 {
         acos(_EARTH_RADIUS / (_EARTH_RADIUS + (elevation_meters / 1000.0))).to_degrees()
     }
@@ -263,8 +314,10 @@ impl NOAACalculator {
             elevation
         }
     }
+}
 
-    pub fn get_utc_noon<Tz: TimeZone>(
+impl NOAACalculatorTrait for NOAACalculator {
+    fn get_utc_noon<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
         geo_location: &GeoLocation,
@@ -283,7 +336,7 @@ impl NOAACalculator {
         }
     }
 
-    pub fn get_utc_midnight<Tz: TimeZone>(
+    fn get_utc_midnight<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
         geo_location: &GeoLocation,
@@ -302,7 +355,7 @@ impl NOAACalculator {
         }
     }
 
-    pub fn get_utc_sunrise<Tz: TimeZone>(
+    fn get_utc_sunrise<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
         geo_location: &GeoLocation,
@@ -331,7 +384,7 @@ impl NOAACalculator {
         if result.is_nan() { None } else { Some(result) }
     }
 
-    pub fn get_utc_sunset<Tz: TimeZone>(
+    fn get_utc_sunset<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
         geo_location: &GeoLocation,
@@ -360,7 +413,7 @@ impl NOAACalculator {
         if result.is_nan() { None } else { Some(result) }
     }
 
-    pub fn get_solar_elevation<Tz: TimeZone>(
+    fn get_solar_elevation<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
         geo_location: &GeoLocation,
@@ -368,7 +421,7 @@ impl NOAACalculator {
         self._get_solar_elevation_azimuth(date_time, geo_location, false)
     }
 
-    pub fn get_solar_azimuth<Tz: TimeZone>(
+    fn get_solar_azimuth<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
         geo_location: &GeoLocation,
@@ -376,81 +429,19 @@ impl NOAACalculator {
         self._get_solar_elevation_azimuth(date_time, geo_location, true)
     }
 }
-
 #[cfg(test)]
 mod jni_tests {
 
     use crate::test_utils::jni::{
-        DEFAULT_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, RandomGeoLocation, assert_almost_equal_f64,
-        assert_almost_equal_f64_option, create_java_calendar, create_java_geo_location,
-        create_java_noaa_calculator, create_java_timezone, init_jvm, random_date_time,
+        DEFAULT_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64,
+        assert_almost_equal_f64_option, create_date_times_with_geolocation,
+        create_java_noaa_calculator, init_jvm,
     };
 
     use super::*;
 
-    use j4rs::{Instance, InvocationArg, Jvm};
+    use j4rs::InvocationArg;
     use rand::Rng;
-
-    struct TestCase {
-        date_time: DateTime<chrono_tz::Tz>,
-        geo_location: GeoLocation,
-        java_geo_location: Instance,
-        java_calculator: Instance,
-        java_calendar: Instance,
-        message: String,
-        zenith: f64,
-        adjust_for_elevation: bool,
-    }
-
-    fn create_test_case(jvm: &Jvm) -> Option<TestCase> {
-        let (date_time, timezone_id) = random_date_time();
-        let _ = create_java_timezone(&jvm, timezone_id)?;
-
-        let random_geo_location = RandomGeoLocation::new();
-        let message = format!(
-            "Latitude: {}, Longitude: {}, Elevation: {}",
-            random_geo_location.latitude,
-            random_geo_location.longitude,
-            random_geo_location.elevation
-        );
-
-        let java_geo_location = create_java_geo_location(
-            &jvm,
-            random_geo_location.latitude,
-            random_geo_location.longitude,
-            random_geo_location.elevation,
-            timezone_id,
-        );
-        let geo_location = GeoLocation::new(
-            random_geo_location.latitude,
-            random_geo_location.longitude,
-            random_geo_location.elevation,
-        );
-        assert_eq!(
-            geo_location.is_some(),
-            java_geo_location.is_some(),
-            "Failed to create test case for {}",
-            message
-        );
-        let java_calculator = create_java_noaa_calculator(&jvm);
-        let java_calendar = create_java_calendar(&jvm, date_time.timestamp_millis(), timezone_id)?;
-        let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
-        let adjust_for_elevation = rand::thread_rng().gen_bool(0.5);
-        if let (Some(geo), Some(java)) = (geo_location, java_geo_location) {
-            Some(TestCase {
-                date_time,
-                geo_location: geo,
-                java_geo_location: java,
-                java_calculator,
-                java_calendar,
-                message,
-                zenith,
-                adjust_for_elevation,
-            })
-        } else {
-            None
-        }
-    }
 
     /// Test Julian day calculation against Java implementation
     #[test]
@@ -458,30 +449,27 @@ mod jni_tests {
         let calculator = NOAACalculator;
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_date_times_with_geolocation(&jvm);
             if test_case.is_none() {
                 continue;
             }
-            let test_case = test_case.unwrap();
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+            let noaa_calculator = create_java_noaa_calculator(&jvm);
 
-            let result = calculator.get_utc_noon(&test_case.date_time, &test_case.geo_location);
+            let result = calculator.get_utc_noon(&date_time, &geo_location);
             let raw_java_result = jvm
                 .invoke(
-                    &test_case.java_calculator,
+                    &noaa_calculator,
                     "getUTCNoon",
                     &[
-                        InvocationArg::from(test_case.java_calendar),
-                        InvocationArg::from(test_case.java_geo_location),
+                        InvocationArg::from(java_calendar),
+                        InvocationArg::from(java_geo_location),
                     ],
                 )
                 .unwrap();
             let java_result = jvm.to_rust::<f64>(raw_java_result).unwrap();
-            assert_almost_equal_f64(
-                result,
-                java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64(result, java_result, DEFAULT_TEST_EPSILON, &message);
         }
     }
     #[test]
@@ -489,29 +477,26 @@ mod jni_tests {
         let calculator = NOAACalculator;
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_date_times_with_geolocation(&jvm);
             if test_case.is_none() {
                 continue;
             }
-            let test_case = test_case.unwrap();
-            let result = calculator.get_utc_midnight(&test_case.date_time, &test_case.geo_location);
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+            let noaa_calculator = create_java_noaa_calculator(&jvm);
+            let result = calculator.get_utc_midnight(&date_time, &geo_location);
             let raw_java_result = jvm
                 .invoke(
-                    &test_case.java_calculator,
+                    &noaa_calculator,
                     "getUTCMidnight",
                     &[
-                        InvocationArg::from(test_case.java_calendar),
-                        InvocationArg::from(test_case.java_geo_location),
+                        InvocationArg::from(java_calendar),
+                        InvocationArg::from(java_geo_location),
                     ],
                 )
                 .unwrap();
             let java_result = jvm.to_rust::<f64>(raw_java_result).unwrap();
-            assert_almost_equal_f64(
-                result,
-                java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64(result, java_result, DEFAULT_TEST_EPSILON, &message);
         }
     }
     #[test]
@@ -519,30 +504,29 @@ mod jni_tests {
         let calculator = NOAACalculator;
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_date_times_with_geolocation(&jvm);
             if test_case.is_none() {
                 continue;
             }
-            let test_case = test_case.unwrap();
-
-            let result = calculator.get_utc_sunrise(
-                &test_case.date_time,
-                &test_case.geo_location,
-                test_case.zenith,
-                test_case.adjust_for_elevation,
-            );
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+            let noaa_calculator = create_java_noaa_calculator(&jvm);
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
+            let adjust_for_elevation = rand::thread_rng().gen_bool(0.5);
+            let result =
+                calculator.get_utc_sunrise(&date_time, &geo_location, zenith, adjust_for_elevation);
             let raw_java_result = jvm
                 .invoke(
-                    &test_case.java_calculator,
+                    &noaa_calculator,
                     "getUTCSunrise",
                     &[
-                        InvocationArg::from(test_case.java_calendar),
-                        InvocationArg::from(test_case.java_geo_location),
-                        InvocationArg::try_from(test_case.zenith)
+                        InvocationArg::from(java_calendar),
+                        InvocationArg::from(java_geo_location),
+                        InvocationArg::try_from(zenith)
                             .unwrap()
                             .into_primitive()
                             .unwrap(),
-                        InvocationArg::try_from(test_case.adjust_for_elevation)
+                        InvocationArg::try_from(adjust_for_elevation)
                             .unwrap()
                             .into_primitive()
                             .unwrap(),
@@ -556,12 +540,7 @@ mod jni_tests {
             } else {
                 Some(java_result)
             };
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
         }
     }
     #[test]
@@ -569,29 +548,29 @@ mod jni_tests {
         let calculator = NOAACalculator;
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_date_times_with_geolocation(&jvm);
             if test_case.is_none() {
                 continue;
             }
-            let test_case = test_case.unwrap();
-            let result = calculator.get_utc_sunset(
-                &test_case.date_time,
-                &test_case.geo_location,
-                test_case.zenith,
-                test_case.adjust_for_elevation,
-            );
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
+            let adjust_for_elevation = rand::thread_rng().gen_bool(0.5);
+            let result =
+                calculator.get_utc_sunset(&date_time, &geo_location, zenith, adjust_for_elevation);
+            let noaa_calculator = create_java_noaa_calculator(&jvm);
             let raw_java_result = jvm
                 .invoke(
-                    &test_case.java_calculator,
+                    &noaa_calculator,
                     "getUTCSunset",
                     &[
-                        InvocationArg::from(test_case.java_calendar),
-                        InvocationArg::from(test_case.java_geo_location),
-                        InvocationArg::try_from(test_case.zenith)
+                        InvocationArg::from(java_calendar),
+                        InvocationArg::from(java_geo_location),
+                        InvocationArg::try_from(zenith)
                             .unwrap()
                             .into_primitive()
                             .unwrap(),
-                        InvocationArg::try_from(test_case.adjust_for_elevation)
+                        InvocationArg::try_from(adjust_for_elevation)
                             .unwrap()
                             .into_primitive()
                             .unwrap(),
@@ -604,12 +583,7 @@ mod jni_tests {
             } else {
                 Some(java_result)
             };
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
         }
     }
     #[test]
@@ -617,31 +591,26 @@ mod jni_tests {
         let calculator = NOAACalculator;
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_date_times_with_geolocation(&jvm);
             if test_case.is_none() {
                 continue;
             }
-            let test_case = test_case.unwrap();
-
-            let result =
-                calculator.get_solar_elevation(&test_case.date_time, &test_case.geo_location);
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+            let noaa_calculator = create_java_noaa_calculator(&jvm);
+            let result = calculator.get_solar_elevation(&date_time, &geo_location);
             let raw_java_result = jvm
                 .invoke(
-                    &test_case.java_calculator,
+                    &noaa_calculator,
                     "getSolarElevation",
                     &[
-                        InvocationArg::from(test_case.java_calendar),
-                        InvocationArg::from(test_case.java_geo_location),
+                        InvocationArg::from(java_calendar),
+                        InvocationArg::from(java_geo_location),
                     ],
                 )
                 .unwrap();
             let java_result = jvm.to_rust::<f64>(raw_java_result).unwrap();
-            assert_almost_equal_f64(
-                result,
-                java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64(result, java_result, DEFAULT_TEST_EPSILON, &message);
         }
     }
 
@@ -650,30 +619,26 @@ mod jni_tests {
         let calculator = NOAACalculator;
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_date_times_with_geolocation(&jvm);
             if test_case.is_none() {
                 continue;
             }
-            let test_case = test_case.unwrap();
-            let result =
-                calculator.get_solar_azimuth(&test_case.date_time, &test_case.geo_location);
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+            let noaa_calculator = create_java_noaa_calculator(&jvm);
+            let result = calculator.get_solar_azimuth(&date_time, &geo_location);
             let raw_java_result = jvm
                 .invoke(
-                    &test_case.java_calculator,
+                    &noaa_calculator,
                     "getSolarAzimuth",
                     &[
-                        InvocationArg::from(test_case.java_calendar),
-                        InvocationArg::from(test_case.java_geo_location),
+                        InvocationArg::from(java_calendar),
+                        InvocationArg::from(java_geo_location),
                     ],
                 )
                 .unwrap();
             let java_result = jvm.to_rust::<f64>(raw_java_result).unwrap();
-            assert_almost_equal_f64(
-                result,
-                java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64(result, java_result, DEFAULT_TEST_EPSILON, &message);
         }
     }
 }

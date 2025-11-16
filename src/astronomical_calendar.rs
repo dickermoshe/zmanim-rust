@@ -1,6 +1,10 @@
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 
-use crate::{constants::*, geolocation::GeoLocation, noaa_calculator::NOAACalculator};
+use crate::{
+    constants::*,
+    geolocation::{GeoLocation, GeoLocationTrait},
+    noaa_calculator::{NOAACalculator, NOAACalculatorTrait},
+};
 /// TODO ADD DOCS
 pub struct AstronomicalCalendar<Tz: TimeZone> {
     /// TODO ADD DOCS
@@ -23,13 +27,94 @@ impl<Tz: TimeZone> AstronomicalCalendar<Tz> {
             noaa_calculator,
         }
     }
-}
+    fn get_adjusted_date_time(&self, date_time: &DateTime<Tz>) -> DateTime<Tz> {
+        let offset = self
+            .get_geo_location()
+            .get_antimeridian_adjustment(date_time);
 
+        if offset == 0 {
+            return date_time.clone();
+        }
+
+        if offset > 0 {
+            date_time.clone() + Duration::days(offset)
+        } else {
+            date_time.clone() - Duration::days(offset)
+        }
+    }
+}
 pub trait AstronomicalCalendarTrait<Tz: TimeZone> {
     fn get_date_time(&self) -> &DateTime<Tz>;
     fn get_geo_location(&self) -> &GeoLocation;
     fn get_noaa_calculator(&self) -> &NOAACalculator;
 
+    fn get_sunrise(&self) -> Option<DateTime<Tz>>;
+
+    fn get_sea_level_sunrise(&self) -> Option<DateTime<Tz>>;
+
+    fn get_begin_civil_twilight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_begin_nautical_twilight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_begin_astronomical_twilight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_sunset(&self) -> Option<DateTime<Tz>>;
+
+    fn get_sea_level_sunset(&self) -> Option<DateTime<Tz>>;
+
+    fn get_end_civil_twilight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_end_nautical_twilight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_end_astronomical_twilight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_sunrise_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>>;
+    fn get_sunset_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>>;
+
+    fn get_utc_sunrise(&self, zenith: f64) -> Option<f64>;
+
+    fn get_utc_sea_level_sunrise(&self, zenith: f64) -> Option<f64>;
+
+    fn get_utc_sunset(&self, zenith: f64) -> Option<f64>;
+
+    fn get_utc_sea_level_sunset(&self, zenith: f64) -> Option<f64>;
+
+    fn get_temporal_hour(&self) -> Option<Duration>;
+    fn get_temporal_hour_from_times(
+        &self,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: &DateTime<Tz>,
+    ) -> Option<Duration>;
+
+    fn get_sun_transit(&self) -> Option<DateTime<Tz>>;
+
+    fn get_solar_midnight(&self) -> Option<DateTime<Tz>>;
+
+    fn get_sun_transit_from_times(
+        &self,
+        start_of_day: DateTime<Tz>,
+        end_of_day: DateTime<Tz>,
+    ) -> Option<DateTime<Tz>>;
+
+    fn get_date_from_time(
+        &self,
+        calculated_time: f64,
+        solar_event: _SolarEvent,
+    ) -> Option<DateTime<Tz>>;
+}
+
+impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz> for AstronomicalCalendar<Tz> {
+    fn get_date_time(&self) -> &DateTime<Tz> {
+        &self.date_time
+    }
+
+    fn get_geo_location(&self) -> &GeoLocation {
+        &self.geo_location
+    }
+
+    fn get_noaa_calculator(&self) -> &NOAACalculator {
+        &self.noaa_calculator
+    }
     fn get_sunrise(&self) -> Option<DateTime<Tz>> {
         let result = self.get_utc_sunrise(_GEOMETRIC_ZENITH)?;
         if result.is_nan() {
@@ -184,21 +269,6 @@ pub trait AstronomicalCalendarTrait<Tz: TimeZone> {
         let temporal_hour = self.get_temporal_hour_from_times(&start_of_day, &end_of_day)?;
         Some(start_of_day + (temporal_hour * 6))
     }
-    fn get_adjusted_date_time(&self, date_time: &DateTime<Tz>) -> DateTime<Tz> {
-        let offset = self
-            .get_geo_location()
-            .get_antimeridian_adjustment(&date_time);
-
-        if offset == 0 {
-            return date_time.clone();
-        }
-        let adjusted_date_time = if offset > 0 {
-            date_time.clone() + Duration::days(offset as i64)
-        } else {
-            date_time.clone() - Duration::days(offset as i64)
-        };
-        adjusted_date_time
-    }
 
     fn get_date_from_time(
         &self,
@@ -253,40 +323,18 @@ pub trait AstronomicalCalendarTrait<Tz: TimeZone> {
     }
 }
 
-impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz> for AstronomicalCalendar<Tz> {
-    fn get_date_time(&self) -> &DateTime<Tz> {
-        &self.date_time
-    }
-
-    fn get_geo_location(&self) -> &GeoLocation {
-        &self.geo_location
-    }
-
-    fn get_noaa_calculator(&self) -> &NOAACalculator {
-        &self.noaa_calculator
-    }
-}
-
 #[cfg(test)]
 mod jni_tests {
 
     use crate::test_utils::jni::{
-        DEFAULT_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, RandomGeoLocation,
-        assert_almost_equal_f64_option, assert_almost_equal_i64_option, create_java_calendar,
-        create_java_geo_location, init_jvm, random_date_time,
+        DEFAULT_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64_option,
+        assert_almost_equal_i64_option, create_astronomical_calendars, init_jvm,
     };
 
     use super::*;
 
     use j4rs::{Instance, InvocationArg, Jvm};
     use rand::Rng;
-
-    struct TestCase {
-        java_calendar: Instance,
-        calendar: AstronomicalCalendar<chrono_tz::Tz>,
-        message: String,
-        zenith: f64,
-    }
 
     fn get_java_date_millis(jvm: &Jvm, date_instance: &Instance) -> Option<i64> {
         let millis_result = jvm.invoke(date_instance, "getTime", InvocationArg::empty());
@@ -297,105 +345,26 @@ mod jni_tests {
         Some(millis)
     }
 
-    fn create_test_case(jvm: &Jvm) -> Option<TestCase> {
-        let (date_time, timezone_id) = random_date_time();
-        let random_geo_location = RandomGeoLocation::new();
-        // let date_time = chrono_tz::Asia::Tehran
-        //     .timestamp_millis_opt(283378756156)
-        //     .unwrap();
-        // let timezone_id = "Asia/Tehran";
-        // let random_geo_location =
-        //     GeoLocation::new(23.44664578436729, 23.44664578436729, 232.63640622976277).unwrap();
-
-        let geo_location = GeoLocation::new(
-            random_geo_location.latitude,
-            random_geo_location.longitude,
-            random_geo_location.elevation,
-        );
-
-        let java_calendar = create_java_calendar(&jvm, date_time.timestamp_millis(), timezone_id)?;
-
-        let java_geo_location = create_java_geo_location(
-            &jvm,
-            random_geo_location.latitude,
-            random_geo_location.longitude,
-            random_geo_location.elevation,
-            timezone_id,
-        );
-        let message = format!(
-            "Latitude: {}, Longitude: {}, Elevation: {}, Timezone: {}, DateTime: {}",
-            random_geo_location.latitude,
-            random_geo_location.longitude,
-            random_geo_location.elevation,
-            timezone_id,
-            date_time.timestamp_millis()
-        );
-
-        assert_eq!(
-            geo_location.is_some(),
-            java_geo_location.is_some(),
-            "Failed to create test case for {}",
-            message
-        );
-        if geo_location.is_none() {
-            return None;
-        }
-        let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
-
-        let astronomical_calendar = AstronomicalCalendar {
-            date_time,
-            geo_location: geo_location.unwrap(),
-            noaa_calculator: NOAACalculator,
-        };
-
-        let java_astronomical_calendar = jvm
-            .create_instance(
-                "com.kosherjava.zmanim.AstronomicalCalendar",
-                &[InvocationArg::from(java_geo_location.unwrap())],
-            )
-            .unwrap();
-        jvm.invoke(
-            &java_astronomical_calendar,
-            "setCalendar",
-            &[InvocationArg::from(java_calendar)],
-        )
-        .unwrap();
-
-        Some(TestCase {
-            calendar: astronomical_calendar,
-            java_calendar: java_astronomical_calendar,
-            message,
-            zenith,
-        })
-    }
-
     #[test]
     fn test_get_sunrise_against_java() {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
 
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
-                .get_sunrise()
-                .map(|d| d.timestamp_millis());
+            let result = calendar.get_sunrise().map(|d| d.timestamp_millis());
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getSunrise",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getSunrise", InvocationArg::empty())
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -405,28 +374,23 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_sea_level_sunrise()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getSeaLevelSunrise",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getSeaLevelSunrise", InvocationArg::empty())
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -436,29 +400,28 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
 
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_begin_civil_twilight()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getBeginCivilTwilight",
                     InvocationArg::empty(),
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -468,28 +431,27 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_begin_nautical_twilight()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getBeginNauticalTwilight",
                     InvocationArg::empty(),
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -500,28 +462,27 @@ mod jni_tests {
         let mut ran = false;
 
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_begin_astronomical_twilight()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getBeginAstronomicalTwilight",
                     InvocationArg::empty(),
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -531,28 +492,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
-                .get_sunset()
-                .map(|d| d.timestamp_millis());
+            let result = calendar.get_sunset().map(|d| d.timestamp_millis());
 
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getSunset",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getSunset", InvocationArg::empty())
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -562,28 +516,23 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_sea_level_sunset()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getSeaLevelSunset",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getSeaLevelSunset", InvocationArg::empty())
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -593,28 +542,27 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_end_civil_twilight()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getEndCivilTwilight",
                     InvocationArg::empty(),
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -624,28 +572,27 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_end_nautical_twilight()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getEndNauticalTwilight",
                     InvocationArg::empty(),
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -655,28 +602,27 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_end_astronomical_twilight()
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getEndAstronomicalTwilight",
                     InvocationArg::empty(),
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -686,23 +632,23 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
 
-            let result = test_case
-                .calendar
-                .get_sunrise_offset_by_degrees(test_case.zenith)
+            let result = calendar
+                .get_sunrise_offset_by_degrees(zenith)
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getSunriseOffsetByDegrees",
-                    &[InvocationArg::try_from(test_case.zenith)
+                    &[InvocationArg::try_from(zenith)
                         .unwrap()
                         .into_primitive()
                         .unwrap()],
@@ -710,7 +656,7 @@ mod jni_tests {
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -720,23 +666,23 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
 
-            let result = test_case
-                .calendar
-                .get_sunset_offset_by_degrees(test_case.zenith)
+            let result = calendar
+                .get_sunset_offset_by_degrees(zenith)
                 .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getSunsetOffsetByDegrees",
-                    &[InvocationArg::try_from(test_case.zenith)
+                    &[InvocationArg::try_from(zenith)
                         .unwrap()
                         .into_primitive()
                         .unwrap()],
@@ -744,7 +690,7 @@ mod jni_tests {
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -754,20 +700,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
 
-            let result = test_case.calendar.get_utc_sunrise(test_case.zenith);
+            let result = calendar.get_utc_sunrise(zenith);
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getUTCSunrise",
-                    &[InvocationArg::try_from(test_case.zenith)
+                    &[InvocationArg::try_from(zenith)
                         .unwrap()
                         .into_primitive()
                         .unwrap()],
@@ -780,12 +727,7 @@ mod jni_tests {
                 Some(java_result)
             };
 
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -795,22 +737,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
 
-            let result = test_case
-                .calendar
-                .get_utc_sea_level_sunrise(test_case.zenith);
+            let result = calendar.get_utc_sea_level_sunrise(zenith);
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getUTCSeaLevelSunrise",
-                    &[InvocationArg::try_from(test_case.zenith)
+                    &[InvocationArg::try_from(zenith)
                         .unwrap()
                         .into_primitive()
                         .unwrap()],
@@ -823,12 +764,7 @@ mod jni_tests {
                 Some(java_result)
             };
 
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -838,20 +774,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
 
-            let result = test_case.calendar.get_utc_sunset(test_case.zenith);
+            let result = calendar.get_utc_sunset(zenith);
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getUTCSunset",
-                    &[InvocationArg::try_from(test_case.zenith)
+                    &[InvocationArg::try_from(zenith)
                         .unwrap()
                         .into_primitive()
                         .unwrap()],
@@ -864,12 +801,7 @@ mod jni_tests {
                 Some(java_result)
             };
 
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -879,22 +811,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
+            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
 
-            let result = test_case
-                .calendar
-                .get_utc_sea_level_sunset(test_case.zenith);
+            let result = calendar.get_utc_sea_level_sunset(zenith);
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getUTCSeaLevelSunset",
-                    &[InvocationArg::try_from(test_case.zenith)
+                    &[InvocationArg::try_from(zenith)
                         .unwrap()
                         .into_primitive()
                         .unwrap()],
@@ -907,12 +838,7 @@ mod jni_tests {
                 Some(java_result)
             };
 
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_TEST_EPSILON,
-                &test_case.message,
-            );
+            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -922,21 +848,17 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case.calendar.get_temporal_hour();
+            let result = calendar.get_temporal_hour();
 
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getTemporalHour",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getTemporalHour", InvocationArg::empty())
                 .unwrap();
             let java_result = jvm.to_rust::<i64>(java_result).ok();
             let java_result = if java_result == Some(-9223372036854775808i64) {
@@ -947,7 +869,7 @@ mod jni_tests {
 
             let result_millis = result.map(|d| d.num_milliseconds());
 
-            assert_almost_equal_i64_option(&result_millis, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result_millis, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -957,16 +879,16 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
             // Get sunrise and sunset for test
-            let start_of_day = test_case.calendar.get_sea_level_sunrise();
-            let end_of_day = test_case.calendar.get_sea_level_sunset();
+            let start_of_day = calendar.get_sea_level_sunrise();
+            let end_of_day = calendar.get_sea_level_sunset();
 
             if start_of_day.is_none() || end_of_day.is_none() {
                 continue;
@@ -975,9 +897,7 @@ mod jni_tests {
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
 
-            let result = test_case
-                .calendar
-                .get_temporal_hour_from_times(&start_of_day, &end_of_day);
+            let result = calendar.get_temporal_hour_from_times(&start_of_day, &end_of_day);
 
             // Create Java Date objects
             let java_start = jvm
@@ -1001,7 +921,7 @@ mod jni_tests {
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getTemporalHour",
                     &[
                         InvocationArg::from(java_start),
@@ -1018,7 +938,7 @@ mod jni_tests {
 
             let result_millis = result.map(|d| d.num_milliseconds());
 
-            assert_almost_equal_i64_option(&result_millis, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result_millis, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -1028,28 +948,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
-                .get_sun_transit()
-                .map(|d| d.timestamp_millis());
+            let result = calendar.get_sun_transit().map(|d| d.timestamp_millis());
 
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getSunTransit",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getSunTransit", InvocationArg::empty())
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -1059,28 +972,21 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
-            let result = test_case
-                .calendar
-                .get_solar_midnight()
-                .map(|d| d.timestamp_millis());
+            let result = calendar.get_solar_midnight().map(|d| d.timestamp_millis());
 
             let java_result = jvm
-                .invoke(
-                    &test_case.java_calendar,
-                    "getSolarMidnight",
-                    InvocationArg::empty(),
-                )
+                .invoke(&java_calendar, "getSolarMidnight", InvocationArg::empty())
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -1090,16 +996,16 @@ mod jni_tests {
         let jvm = init_jvm();
         let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_test_case(&jvm);
+            let test_case = create_astronomical_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             ran = true;
-            let test_case = test_case.unwrap();
+            let (calendar, java_calendar, message) = test_case.unwrap();
 
             // Get sunrise and sunset for test
-            let start_of_day = test_case.calendar.get_sea_level_sunrise();
-            let end_of_day = test_case.calendar.get_sea_level_sunset();
+            let start_of_day = calendar.get_sea_level_sunrise();
+            let end_of_day = calendar.get_sea_level_sunset();
 
             if start_of_day.is_none() || end_of_day.is_none() {
                 continue;
@@ -1108,8 +1014,7 @@ mod jni_tests {
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
 
-            let result = test_case
-                .calendar
+            let result = calendar
                 .get_sun_transit_from_times(start_of_day.clone(), end_of_day.clone())
                 .map(|d| d.timestamp_millis());
 
@@ -1135,7 +1040,7 @@ mod jni_tests {
 
             let java_result = jvm
                 .invoke(
-                    &test_case.java_calendar,
+                    &java_calendar,
                     "getSunTransit",
                     &[
                         InvocationArg::from(java_start),
@@ -1145,7 +1050,7 @@ mod jni_tests {
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
 
-            assert_almost_equal_i64_option(&result, &java_result, 1000, &test_case.message);
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }

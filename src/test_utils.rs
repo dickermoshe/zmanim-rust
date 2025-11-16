@@ -2,18 +2,26 @@
 pub mod jni {
     use std::sync::Once;
 
-    use chrono::{DateTime, Duration, TimeZone};
-    use chrono_tz::TZ_VARIANTS;
-    use j4rs::{ClasspathEntry, Instance, InvocationArg, Jvm, JvmBuilder};
+    use chrono::{DateTime, Datelike, Duration, TimeZone};
+    use chrono_tz::{TZ_VARIANTS, Tz};
+    use j4rs::{ClasspathEntry, Instance, InvocationArg, Jvm, JvmBuilder, errors::J4RsError};
     use rand::Rng;
-    pub static DEFAULT_TEST_ITERATIONS: i32 = 10000;
+
+    use crate::{
+        astronomical_calendar::AstronomicalCalendar,
+        constants::JewishMonth,
+        geolocation::GeoLocation,
+        jewish_date::{JewishDate, JewishDateTrait},
+        noaa_calculator::NOAACalculator,
+        zmanim_calendar::ZmanimCalendar,
+    };
+    pub static DEFAULT_TEST_ITERATIONS: i32 = 1000;
     pub static DEFAULT_TEST_EPSILON: f64 = 0.2;
 
     // Guards the one-time JVM creation. Runs exactly once, even across threads.
     static JVM_INIT: Once = Once::new();
 
     pub fn init_jvm() -> Jvm {
-        // Ensure the shared JVM exists (creates it on first call).
         JVM_INIT.call_once(|| {
             let _ = JvmBuilder::new()
                 .classpath_entry(ClasspathEntry::new(
@@ -26,36 +34,6 @@ pub mod jni {
         // Attach the current thread to the existing shared JVM (returns a local handle).
         // This works on any thread; JNI allows re-attach on the same thread.
         Jvm::attach_thread().unwrap()
-    }
-
-    pub struct RandomGeoLocation {
-        pub latitude: f64,
-        pub longitude: f64,
-        pub elevation: f64,
-    }
-
-    impl RandomGeoLocation {
-        pub fn new() -> Self {
-            let mut rng = rand::thread_rng();
-            Self {
-                latitude: rng.gen_range(-91.0..=91.0),
-                longitude: rng.gen_range(-181.0..=181.0),
-                elevation: rng.gen_range(-1.0..=1000.0), // Java GeoLocation requires non-negative elevation
-            }
-        }
-    }
-
-    pub fn random_date_time() -> (DateTime<chrono_tz::Tz>, &'static str) {
-        let mut rng = rand::thread_rng();
-        let tz = TZ_VARIANTS[rng.gen_range(0..TZ_VARIANTS.len())];
-        let years_in_milliseconds = 1000 * 3600 * 24 * 365;
-        let milliseconds_since_epoch: i64 = rng.gen_range(
-            -years_in_milliseconds..=years_in_milliseconds * 100, // 1870 to 2070
-        );
-        (
-            tz.timestamp_millis_opt(milliseconds_since_epoch).unwrap(),
-            tz.name(),
-        )
     }
     pub fn create_java_timezone(jvm: &Jvm, timezone_id: &str) -> Option<Instance> {
         let tz = jvm
@@ -74,16 +52,23 @@ pub mod jni {
         Some(tz)
     }
 
-    pub fn create_java_geo_location(
+    pub fn create_random_geolocations(
         jvm: &Jvm,
-        latitude: f64,
-        longitude: f64,
-        elevation: f64,
         timezone_id: &str,
-    ) -> Option<Instance> {
-        let utc = create_java_timezone(jvm, timezone_id)?;
-        Some(
-            jvm.create_instance(
+    ) -> Option<(GeoLocation, Instance, String)> {
+        let mut rng = rand::thread_rng();
+        let latitude = rng.gen_range(-91.0..=91.0);
+        let longitude = rng.gen_range(-181.0..=181.0);
+        let elevation = rng.gen_range(-1.0..=1000.0);
+        let message = format!(
+            "Latitude: {}, Longitude: {}, Elevation: {}",
+            latitude, longitude, elevation
+        );
+        // Being unable to find a timezone that is available in the JVM
+        // is not a valid test case, so we return None
+        let tz = create_java_timezone(jvm, timezone_id)?;
+        let java_geo_location = jvm
+            .create_instance(
                 "com.kosherjava.zmanim.util.GeoLocation",
                 &[
                     InvocationArg::try_from("Name").unwrap(),
@@ -99,29 +84,57 @@ pub mod jni {
                         .unwrap()
                         .into_primitive()
                         .unwrap(),
-                    InvocationArg::from(utc),
+                    InvocationArg::from(tz),
                 ],
             )
-            .ok()?,
-        )
+            .ok();
+        let geo_location = GeoLocation::new(latitude, longitude, elevation);
+        assert_eq!(
+            geo_location.is_some(),
+            java_geo_location.is_some(),
+            "Failed to create test case for {}",
+            message
+        );
+        if geo_location.is_none() {
+            return None;
+        }
+        let geo_location = geo_location.unwrap();
+        let java_geo_location = java_geo_location.unwrap();
+        Some((geo_location, java_geo_location, message))
     }
-    pub fn create_java_calendar(
-        jvm: &Jvm,
-        milliseconds_since_epoch: i64,
-        timezone_id: &str,
-    ) -> Option<Instance> {
-        let timezone = create_java_timezone(jvm, timezone_id)?;
-        let calendar_instance = jvm
+
+    fn random_date_time() -> (DateTime<chrono_tz::Tz>, Tz, i64, String) {
+        let mut rng = rand::thread_rng();
+        let tz = random_timezone();
+        let years_in_milliseconds = 1000 * 3600 * 24 * 365;
+        let milliseconds_since_epoch: i64 = rng.gen_range(
+            -years_in_milliseconds..=years_in_milliseconds * 100, // 1870 to 2070
+        );
+        let dt = tz.timestamp_millis_opt(milliseconds_since_epoch).unwrap();
+        let timezone_id = tz.name();
+        let message = format!("DateTime: {}, Timezone: {}", dt, timezone_id);
+        (dt, tz, milliseconds_since_epoch, message)
+    }
+    fn random_jewish_year() -> i64 {
+        let epoch_year = 5730;
+        rand::thread_rng().gen_range((epoch_year - 100)..=(epoch_year + 100)) // 100 years before and after the epoch
+    }
+
+    pub fn create_date_times(jvm: &Jvm) -> Option<(DateTime<chrono_tz::Tz>, Instance, Tz, String)> {
+        let (date_time, timezone, milliseconds_since_epoch, message) = random_date_time();
+        let timezone_id = timezone.name();
+        let java_timezone = create_java_timezone(jvm, timezone_id)?;
+        let java_calendar = jvm
             .invoke_static("java.util.Calendar", "getInstance", InvocationArg::empty())
             .unwrap();
         jvm.invoke(
-            &calendar_instance,
+            &java_calendar,
             "setTimeZone",
-            &[InvocationArg::from(timezone)],
+            &[InvocationArg::from(java_timezone)],
         )
         .unwrap();
         jvm.invoke(
-            &calendar_instance,
+            &java_calendar,
             "setTimeInMillis",
             &[InvocationArg::try_from(milliseconds_since_epoch)
                 .unwrap()
@@ -129,24 +142,75 @@ pub mod jni {
                 .unwrap()],
         )
         .unwrap();
-        Some(calendar_instance)
-    }
-    pub fn create_java_noaa_calculator(jvm: &Jvm) -> Instance {
-        jvm.create_instance(
-            "com.kosherjava.zmanim.util.NOAACalculator",
-            InvocationArg::empty(),
-        )
-        .unwrap()
+
+        Some((date_time, java_calendar, timezone, message))
     }
 
-    pub fn create_java_zmanim_calendar(
+    pub fn create_date_times_with_geolocation(
         jvm: &Jvm,
-        java_geo_location: Instance,
-        java_calendar: Instance,
-        use_astronomical_chatzos: bool,
-        use_astronomical_chatzos_for_other_zmanim: bool,
-        candle_lighting_offset: Duration,
-    ) -> Instance {
+    ) -> Option<(
+        DateTime<chrono_tz::Tz>,
+        Instance,
+        GeoLocation,
+        Instance,
+        String,
+    )> {
+        let (date_time, java_calendar, timezone, date_time_message) = create_date_times(jvm)?;
+        let (geolocation, java_geo_location, geolocation_message) =
+            create_random_geolocations(jvm, timezone.name())?;
+        let new_message = format!("{}, {}", date_time_message, geolocation_message);
+        Some((
+            date_time,
+            java_calendar,
+            geolocation,
+            java_geo_location,
+            new_message,
+        ))
+    }
+    pub fn create_astronomical_calendars(
+        jvm: &Jvm,
+    ) -> Option<(AstronomicalCalendar<chrono_tz::Tz>, Instance, String)> {
+        let (date_time, java_calendar, geo_location, java_geo_location, message) =
+            create_date_times_with_geolocation(jvm)?;
+        let astronomical_calendar =
+            AstronomicalCalendar::new(date_time, geo_location, NOAACalculator::new());
+        let java_astronomical_calendar = jvm
+            .create_instance(
+                "com.kosherjava.zmanim.AstronomicalCalendar",
+                &[InvocationArg::from(java_geo_location)],
+            )
+            .unwrap();
+        jvm.invoke(
+            &java_astronomical_calendar,
+            "setCalendar",
+            &[InvocationArg::from(java_calendar)],
+        )
+        .unwrap();
+        Some((astronomical_calendar, java_astronomical_calendar, message))
+    }
+
+    pub fn create_zmanim_calendars(
+        jvm: &Jvm,
+    ) -> Option<(ZmanimCalendar<chrono_tz::Tz>, Instance, String)> {
+        let (date_time, java_calendar, geo_location, java_geo_location, message) =
+            create_date_times_with_geolocation(jvm)?;
+        let candle_lighting_offset = Duration::minutes(rand::thread_rng().gen_range(0..=60));
+        let use_astronomical_chatzos = rand::thread_rng().gen_bool(0.5);
+        let use_astronomical_chatzos_for_other_zmanim = rand::thread_rng().gen_bool(0.5);
+        let zmanim_calendar = ZmanimCalendar::new(
+            AstronomicalCalendar::new(date_time, geo_location, NOAACalculator::new()),
+            candle_lighting_offset,
+            use_astronomical_chatzos,
+            use_astronomical_chatzos_for_other_zmanim,
+        );
+        let message = format!(
+            "{}, {}, {}, {}, {}",
+            message,
+            candle_lighting_offset,
+            use_astronomical_chatzos,
+            use_astronomical_chatzos_for_other_zmanim,
+            candle_lighting_offset
+        );
         let instance = jvm
             .create_instance(
                 "com.kosherjava.zmanim.ZmanimCalendar",
@@ -202,7 +266,7 @@ pub mod jni {
             ],
         )
         .unwrap();
-
+        // TODO: Document that we also factor in elevation for zmanim calculations
         jvm.invoke(
             &instance,
             "setUseElevation",
@@ -212,8 +276,127 @@ pub mod jni {
                 .unwrap()],
         )
         .unwrap();
-        instance
+        Some((zmanim_calendar, instance, message))
     }
+
+    pub fn create_jewish_dates(jvm: &Jvm) -> Option<(JewishDate, Instance, String)> {
+        let use_gregorian_date = rand::thread_rng().gen_bool(0.5);
+        if use_gregorian_date {
+            let (date_time, _, _, _) = random_date_time();
+
+            let message = format!(
+                "year: {}, month: {}, day: {}",
+                date_time.year(),
+                date_time.month(),
+                date_time.day(),
+            );
+            let year_arg = InvocationArg::try_from(date_time.year() as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let month_arg = InvocationArg::try_from(date_time.month() as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let day_arg = InvocationArg::try_from(date_time.day() as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let jewish_date_instance = jvm
+                .invoke_static("java.time.LocalDate", "of", &[year_arg, month_arg, day_arg])
+                .unwrap();
+            let jewish_date = JewishDate::from_gregorian_date(
+                date_time.year() as i64,
+                date_time.month() as u8,
+                date_time.day() as u8,
+            );
+            let java_jewish_date = jvm
+                .create_instance(
+                    "com.kosherjava.zmanim.hebrewcalendar.JewishDate",
+                    &[InvocationArg::from(jewish_date_instance)],
+                )
+                .ok();
+
+            assert_eq!(
+                jewish_date.is_some(),
+                java_jewish_date.is_some(),
+                "{}",
+                message
+            );
+            if jewish_date.is_none() {
+                return None;
+            }
+            let jewish_date = jewish_date.unwrap();
+            let java_jewish_date = java_jewish_date.unwrap();
+            return Some((jewish_date, java_jewish_date, message));
+        } else {
+            let (year, month, day) = random_hebrew_date();
+            let message = format!("year: {}, month: {}, day: {}", year, month, day,);
+            let jewish_date =
+                JewishDate::from_hebrew_date(year, JewishMonth::try_from(month).unwrap(), day);
+            let year_arg = InvocationArg::try_from(year as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let month_arg = InvocationArg::try_from(month as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let day_arg = InvocationArg::try_from(day as i32)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
+            let instance = jvm.create_instance(
+                "com.kosherjava.zmanim.hebrewcalendar.JewishDate",
+                &[year_arg, month_arg, day_arg],
+            );
+
+            let java_jewish_date = match instance {
+                Ok(instance) => Some(instance),
+                Err(err) => {
+                    if let J4RsError::JavaError(message) = &err {
+                        // We will ignore the error if it is because the month is not between 1 and 12
+                        if message.contains("The Jewish month has to be between 1 and 12") {
+                            println!("{}", message);
+                            return None;
+                        } else {
+                            panic!("{}", err);
+                        }
+                    }
+                    panic!("{}", err);
+                }
+            };
+            // Java will gracefully handle the case of a day of 30 for a month that only has 29 days,
+            // and will set it to the last day of the month, whereas Rust will not.
+            if jewish_date.is_none() && java_jewish_date.is_some() && day == 30_i64 {
+                return None;
+            }
+            assert_eq!(
+                jewish_date.is_some(),
+                java_jewish_date.is_some(),
+                "{}",
+                message
+            );
+            if jewish_date.is_none() {
+                return None;
+            }
+            let jewish_date = jewish_date.unwrap();
+            let java_jewish_date = java_jewish_date.unwrap();
+            return Some((jewish_date, java_jewish_date, message));
+        }
+    }
+    pub fn create_java_noaa_calculator(jvm: &Jvm) -> Instance {
+        jvm.create_instance(
+            "com.kosherjava.zmanim.util.NOAACalculator",
+            InvocationArg::empty(),
+        )
+        .unwrap()
+    }
+
+    pub fn random_timezone() -> Tz {
+        TZ_VARIANTS[rand::thread_rng().gen_range(0..TZ_VARIANTS.len())]
+    }
+
     pub fn assert_almost_equal_f64(a: f64, b: f64, diff: f64, message: &str) {
         let result = (a - b).abs() < diff;
         let distance = (a - b).abs();
@@ -289,5 +472,39 @@ pub mod jni {
                 assert!(false, "Error: {:?} vs {:?}, {}", a, b, message);
             }
         }
+    }
+
+    pub fn random_hebrew_date() -> (i64, i64, i64) {
+        use crate::constants::JewishMonth;
+        let mut rng = rand::thread_rng();
+        let year = random_jewish_year();
+
+        // Convert to Rust JewishMonth enum
+        let month = match rng.gen_range(1..=13) {
+            1 => JewishMonth::Nissan,
+            2 => JewishMonth::Iyar,
+            3 => JewishMonth::Sivan,
+            4 => JewishMonth::Tammuz,
+            5 => JewishMonth::Av,
+            6 => JewishMonth::Elul,
+            7 => JewishMonth::Tishrei,
+            8 => JewishMonth::Cheshvan,
+            9 => JewishMonth::Kislev,
+            10 => JewishMonth::Teves,
+            11 => JewishMonth::Shevat,
+            12 => JewishMonth::Adar,
+            13 => JewishMonth::Adarii,
+            _ => unreachable!(),
+        };
+        let day = rng.gen_range(1..=30);
+        (year, month as i64, day)
+    }
+    pub fn random_gregorian_date() -> (i64, i64, i64) {
+        let (date_time, _, _, _) = random_date_time();
+        (
+            date_time.year() as i64,
+            date_time.month() as i64,
+            date_time.day() as i64,
+        )
     }
 }
