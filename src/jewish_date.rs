@@ -7,9 +7,12 @@ use icu_calendar::{
 
 use crate::constants::*;
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub struct JewishDate {
     pub hebrew_date: Date<Hebrew>,
 }
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub struct MoladData {
     pub hours: i64,
     pub minutes: i64,

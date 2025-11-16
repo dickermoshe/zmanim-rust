@@ -12,6 +12,7 @@ use crate::jewish_date::{JewishDate, JewishDateTrait};
 use crate::noaa_calculator::NOAACalculator;
 use crate::parshas::*;
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct JewishCalendar {
     jewish_date: JewishDate,
     in_israel: bool,

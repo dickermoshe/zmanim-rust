@@ -6,6 +6,7 @@ use crate::{
     noaa_calculator::{NOAACalculator, NOAACalculatorTrait},
 };
 /// TODO ADD DOCS
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct AstronomicalCalendar<Tz: TimeZone> {
     /// TODO ADD DOCS
     pub date_time: DateTime<Tz>,

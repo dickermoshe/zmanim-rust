@@ -7,6 +7,7 @@ use crate::{
 };
 
 /// TODO ADD DOCS
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct ZmanimCalendar<Tz: TimeZone> {
     /// TODO ADD DOCS
     pub astronomical_calendar: AstronomicalCalendar<Tz>,

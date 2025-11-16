@@ -3,6 +3,7 @@ use chrono::{DateTime, Datelike, TimeZone, Timelike};
 use core::f64::consts::PI;
 use libm::{acos, asin, cos, floor, fmod, sin, tan};
 /// TODO ADD DOCS
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct NOAACalculator;
 
 pub trait NOAACalculatorTrait {

@@ -3,7 +3,7 @@ use chrono::{DateTime, Offset, TimeZone};
 use core::f64::consts::PI;
 use libm::{atan, atan2, cos, log, sin, sqrt, tan};
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct GeoLocation {
     pub latitude: f64,
     pub longitude: f64,
