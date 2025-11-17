@@ -265,7 +265,6 @@ pub mod jni {
             ],
         )
         .unwrap();
-        // TODO: Document that we also factor in elevation for zmanim calculations
         jvm.invoke(
             &instance,
             "setUseElevation",

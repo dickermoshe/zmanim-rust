@@ -35,6 +35,18 @@ The library is designed with modularity and flexibility in mind. It supports bot
 
 The project structure includes comprehensive modules for different aspects of Jewish time and calendar calculations, each carefully implemented to maintain accuracy and follow established halachic principles.
 
+### Zmanim Calculator
+
+We strive to follow KosherJava's APIs as closely as possible to maintain compatibility and familiarity for developers who have used the Java library. However, our documentation is not as comprehensive as KosherJava's. For detailed API documentation and usage examples, please refer to the [KosherJava documentation](https://kosherjava.com/zmanim-project/how-to-use-the-zmanim-api/).
+
+#### API Differences from KosherJava
+
+While we maintain API compatibility where possible, there are some important differences due to Rust's type system and design philosophy:
+
+- **Null Handling**: In places where KosherJava returns `NaN` or `Long.MIN_VALUE` to denote null or invalid values, we use Rust's `Option<T>` type and return `None` instead. This provides type safety and makes null handling explicit in the API.
+
+- **Elevation Handling**: We always factor elevation into calculations if it is provided when creating the calendar. If you want to calculate zmanim without elevation adjustments, provide `0` as the elevation value when creating the calendar instance.
+
 ## License
 
 This project is based on KosherJava, which is released under the GNU Lesser General Public License version 2.1 (LGPL 2.1). This license allows the library to be used in both free and proprietary software while ensuring that modifications to the library itself remain open source.
