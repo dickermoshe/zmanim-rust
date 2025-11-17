@@ -1,4 +1,4 @@
-use crate::constants::{_Formula, _HOUR_MILLIS, _MINUTE_MILLIS};
+use crate::constants::{_Formula, _HOUR_MILLIS, _MINUTE_MILLIS, GeoLocationTrait};
 use chrono::{DateTime, Offset, TimeZone};
 use core::f64::consts::PI;
 use libm::{atan, atan2, cos, log, sin, sqrt, tan};
@@ -8,18 +8,6 @@ pub struct GeoLocation {
     pub latitude: f64,
     pub longitude: f64,
     pub elevation: f64,
-}
-pub trait GeoLocationTrait {
-    fn get_latitude(&self) -> f64;
-    fn get_longitude(&self) -> f64;
-    fn get_elevation(&self) -> f64;
-    fn get_rhumb_line_distance(&self, location: &impl GeoLocationTrait) -> f64;
-    fn get_rhumb_line_bearing(&self, location: &impl GeoLocationTrait) -> f64;
-    fn get_geodesic_initial_bearing(&self, location: &impl GeoLocationTrait) -> Option<f64>;
-    fn get_geodesic_final_bearing(&self, location: &impl GeoLocationTrait) -> Option<f64>;
-    fn get_geodesic_distance(&self, location: &impl GeoLocationTrait) -> Option<f64>;
-    fn get_local_mean_time_offset<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i64;
-    fn get_antimeridian_adjustment<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i64;
 }
 
 impl GeoLocationTrait for GeoLocation {

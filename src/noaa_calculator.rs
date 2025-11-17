@@ -1,52 +1,10 @@
-use crate::{constants::*, geolocation::GeoLocation};
+use crate::constants::*;
 use chrono::{DateTime, Datelike, TimeZone, Timelike};
 use core::f64::consts::PI;
 use libm::{acos, asin, cos, floor, fmod, sin, tan};
 /// TODO ADD DOCS
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct NOAACalculator;
-
-pub trait NOAACalculatorTrait {
-    fn get_utc_noon<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
-    ) -> f64;
-
-    fn get_utc_midnight<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
-    ) -> f64;
-
-    fn get_utc_sunrise<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
-        zenith: f64,
-        adjust_for_elevation: bool,
-    ) -> Option<f64>;
-
-    fn get_utc_sunset<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
-        zenith: f64,
-        adjust_for_elevation: bool,
-    ) -> Option<f64>;
-
-    fn get_solar_elevation<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
-    ) -> f64;
-
-    fn get_solar_azimuth<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
-    ) -> f64;
-}
 
 impl NOAACalculator {
     fn _get_elevation_adjustment(&self, elevation_meters: f64) -> f64 {
@@ -253,12 +211,12 @@ impl NOAACalculator {
     fn _get_solar_elevation_azimuth<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
         is_azimuth: bool,
     ) -> f64 {
         let date_time = date_time.to_utc();
-        let latitude = geo_location.latitude;
-        let longitude = geo_location.longitude;
+        let latitude = geo_location.get_latitude();
+        let longitude = geo_location.get_longitude();
 
         let minute: f64 = date_time.minute() as f64;
         let second: f64 = date_time.second() as f64;
@@ -312,12 +270,12 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_utc_noon<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
     ) -> f64 {
         let julian_day = self._get_julian_day(date_time);
         let noon = self._get_solar_noon_midnight_utc(
             julian_day,
-            -geo_location.longitude,
+            -geo_location.get_longitude(),
             _SolarEvent::Noon,
         );
         let noon_hours = noon / 60.0;
@@ -331,12 +289,12 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_utc_midnight<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
     ) -> f64 {
         let julian_day = self._get_julian_day(date_time);
         let midnight = self._get_solar_noon_midnight_utc(
             julian_day,
-            -geo_location.longitude,
+            -geo_location.get_longitude(),
             _SolarEvent::Midnight,
         );
         let midnight_hours = midnight / 60.0;
@@ -350,20 +308,20 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_utc_sunrise<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
         zenith: f64,
         adjust_for_elevation: bool,
     ) -> Option<f64> {
         let elevation = if adjust_for_elevation {
-            geo_location.elevation
+            geo_location.get_elevation()
         } else {
             0.0
         };
         let adjusted_zenith = self._adjust_zenith(zenith, elevation);
         let sunrise = self._get_sun_rise_set_utc(
             date_time,
-            geo_location.latitude,
-            -geo_location.longitude,
+            geo_location.get_latitude(),
+            -geo_location.get_longitude(),
             adjusted_zenith,
             _SolarEvent::Sunrise,
         );
@@ -379,20 +337,20 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_utc_sunset<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
         zenith: f64,
         adjust_for_elevation: bool,
     ) -> Option<f64> {
         let elevation = if adjust_for_elevation {
-            geo_location.elevation
+            geo_location.get_elevation()
         } else {
             0.0
         };
         let adjusted_zenith = self._adjust_zenith(zenith, elevation);
         let sunset = self._get_sun_rise_set_utc(
             date_time,
-            geo_location.latitude,
-            -geo_location.longitude,
+            geo_location.get_latitude(),
+            -geo_location.get_longitude(),
             adjusted_zenith,
             _SolarEvent::Sunset,
         );
@@ -408,7 +366,7 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_solar_elevation<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
     ) -> f64 {
         self._get_solar_elevation_azimuth(date_time, geo_location, false)
     }
@@ -416,7 +374,7 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_solar_azimuth<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &GeoLocation,
+        geo_location: &impl GeoLocationTrait,
     ) -> f64 {
         self._get_solar_elevation_azimuth(date_time, geo_location, true)
     }

@@ -3,7 +3,7 @@ use crate::constants::Parsha;
 pub const PARSHA_LIST_0: [Option<Parsha>; 51] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -56,7 +56,7 @@ pub const PARSHA_LIST_0: [Option<Parsha>; 51] = [
 pub const PARSHA_LIST_1: [Option<Parsha>; 51] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -108,7 +108,7 @@ pub const PARSHA_LIST_1: [Option<Parsha>; 51] = [
 ];
 pub const PARSHA_LIST_2: [Option<Parsha>; 52] = [
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -162,7 +162,7 @@ pub const PARSHA_LIST_2: [Option<Parsha>; 52] = [
 ];
 pub const PARSHA_LIST_3: [Option<Parsha>; 52] = [
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -217,7 +217,7 @@ pub const PARSHA_LIST_3: [Option<Parsha>; 52] = [
 pub const PARSHA_LIST_4: [Option<Parsha>; 52] = [
     None,
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -271,7 +271,7 @@ pub const PARSHA_LIST_4: [Option<Parsha>; 52] = [
 pub const PARSHA_LIST_5: [Option<Parsha>; 52] = [
     None,
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -325,7 +325,7 @@ pub const PARSHA_LIST_5: [Option<Parsha>; 52] = [
 pub const PARSHA_LIST_6: [Option<Parsha>; 55] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -382,7 +382,7 @@ pub const PARSHA_LIST_6: [Option<Parsha>; 55] = [
 pub const PARSHA_LIST_7: [Option<Parsha>; 56] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -439,7 +439,7 @@ pub const PARSHA_LIST_7: [Option<Parsha>; 56] = [
 ];
 pub const PARSHA_LIST_8: [Option<Parsha>; 56] = [
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -497,7 +497,7 @@ pub const PARSHA_LIST_8: [Option<Parsha>; 56] = [
 ];
 pub const PARSHA_LIST_9: [Option<Parsha>; 56] = [
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -556,7 +556,7 @@ pub const PARSHA_LIST_9: [Option<Parsha>; 56] = [
 pub const PARSHA_LIST_10: [Option<Parsha>; 56] = [
     None,
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -614,7 +614,7 @@ pub const PARSHA_LIST_10: [Option<Parsha>; 56] = [
 pub const PARSHA_LIST_11: [Option<Parsha>; 56] = [
     None,
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -672,7 +672,7 @@ pub const PARSHA_LIST_11: [Option<Parsha>; 56] = [
 pub const PARSHA_LIST_12: [Option<Parsha>; 51] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -724,7 +724,7 @@ pub const PARSHA_LIST_12: [Option<Parsha>; 51] = [
 ];
 pub const PARSHA_LIST_13: [Option<Parsha>; 52] = [
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),
@@ -779,7 +779,7 @@ pub const PARSHA_LIST_13: [Option<Parsha>; 52] = [
 pub const PARSHA_LIST_14: [Option<Parsha>; 55] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -836,7 +836,7 @@ pub const PARSHA_LIST_14: [Option<Parsha>; 55] = [
 pub const PARSHA_LIST_15: [Option<Parsha>; 56] = [
     None,
     Some(Parsha::Vayeilech),
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     Some(Parsha::Bereshis),
     Some(Parsha::Noach),
@@ -894,7 +894,7 @@ pub const PARSHA_LIST_15: [Option<Parsha>; 56] = [
 pub const PARSHA_LIST_16: [Option<Parsha>; 56] = [
     None,
     None,
-    Some(Parsha::Haazinu),
+    Some(Parsha::HaAzinu),
     None,
     None,
     Some(Parsha::Bereshis),

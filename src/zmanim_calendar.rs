@@ -1,10 +1,6 @@
 use chrono::{DateTime, Duration, TimeZone};
 
-use crate::{
-    astronomical_calendar::{AstronomicalCalendar, AstronomicalCalendarTrait},
-    constants::*,
-    math::multiply_duration,
-};
+use crate::{astronomical_calendar::AstronomicalCalendar, constants::*, math::multiply_duration};
 
 /// TODO ADD DOCS
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -18,112 +14,9 @@ pub struct ZmanimCalendar<Tz: TimeZone> {
     /// TODO ADD DOCS
     pub candle_lighting_offset: Duration,
 }
-pub trait ZmanimCalendarTrait<Tz: TimeZone> {
-    fn get_astronomical_calendar(&self) -> &AstronomicalCalendar<Tz>;
-    fn get_use_astronomical_chatzos(&self) -> bool;
-    fn get_use_astronomical_chatzos_for_other_zmanim(&self) -> bool;
-    fn get_candle_lighting_offset(&self) -> Duration;
-
-    fn get_tzais(&self) -> Option<DateTime<Tz>>;
-
-    fn get_alos_hashachar(&self) -> Option<DateTime<Tz>>;
-    fn get_alos_72(&self) -> Option<DateTime<Tz>>;
-    fn get_chatzos(&self) -> Option<DateTime<Tz>>;
-    fn get_chatzos_as_half_day(&self) -> Option<DateTime<Tz>>;
-
-    fn get_percent_of_shaah_zmanis_from_degrees(&self, degrees: f64, sunset: bool) -> Option<f64>;
-
-    fn get_half_day_based_zman(
-        &self,
-        start_of_half_day: DateTime<Tz>,
-        end_of_half_day: DateTime<Tz>,
-        hours: f64,
-    ) -> Option<DateTime<Tz>>;
-    fn get_half_day_based_shaah_zmanis(
-        &self,
-        start_of_half_day: &DateTime<Tz>,
-        end_of_half_day: &DateTime<Tz>,
-    ) -> Option<Duration>;
-    fn get_shaah_zmanis_based_zman(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-        hours: f64,
-    ) -> Option<DateTime<Tz>>;
-
-    fn _get_sof_zman_shma(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
-        synchronous: bool,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_sof_zman_shma(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_sof_zman_shma_gra(&self) -> Option<DateTime<Tz>>;
-    fn get_sof_zman_shma_mga(&self) -> Option<DateTime<Tz>>;
-
-    fn get_tzais_72(&self) -> Option<DateTime<Tz>>;
-
-    fn get_candle_lighting(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sof_zman_tfila(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_sof_zman_tfila_gra(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sof_zman_tfila_mga(&self) -> Option<DateTime<Tz>>;
-
-    fn _get_mincha_gedola(
-        &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
-        synchronous: bool,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_mincha_gedola(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-    fn get_mincha_gedola_default(&self) -> Option<DateTime<Tz>>;
-
-    fn get_samuch_le_mincha_ketana(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_mincha_ketana(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_mincha_ketana_default(&self) -> Option<DateTime<Tz>>;
-
-    fn get_plag_hamincha(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_plag_hamincha_default(&self) -> Option<DateTime<Tz>>;
-
-    fn get_shaah_zmanis_gra(&self) -> Option<Duration>;
-
-    fn get_shaah_zmanis_mga(&self) -> Option<Duration>;
-}
 
 impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
-    fn get_astronomical_calendar(&self) -> &AstronomicalCalendar<Tz> {
+    fn get_astronomical_calendar(&self) -> &impl AstronomicalCalendarTrait<Tz> {
         &self.astronomical_calendar
     }
     fn get_use_astronomical_chatzos(&self) -> bool {

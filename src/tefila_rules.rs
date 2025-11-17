@@ -1,11 +1,11 @@
 use crate::constants::*;
-use crate::jewish_calendar::{JewishCalendar, JewishCalendarTrait};
-use crate::jewish_date::JewishDateTrait;
+use crate::jewish_calendar::JewishCalendar;
+
 use chrono::Datelike;
 
 ///
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct TefilaRules {
     pub tachanun_recited_end_of_tishrei: bool,
 
@@ -69,47 +69,15 @@ impl TefilaRules {
     }
 }
 
-pub trait TefilaRulesTrait {
-    fn is_tachanun_recited_shacharis(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_tachanun_recited_mincha(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_hallel_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_hallel_shalem_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_al_hanissim_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_yaaleh_veyavo_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_mizmor_lesoda_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_vesein_tal_umatar_start_date(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_vesein_tal_umatar_starting_tonight(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_vesein_tal_umatar_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_vesein_beracha_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_mashiv_haruach_start_date(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_mashiv_haruach_end_date(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_mashiv_haruach_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-
-    fn is_morid_hatal_recited(&self, jewish_calendar: &JewishCalendar) -> bool;
-}
-
 impl TefilaRulesTrait for TefilaRules {
-    fn is_tachanun_recited_shacharis(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_tachanun_recited_shacharis(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         let holiday_index = jewish_calendar.get_yom_tov_index();
         let jewish_date = jewish_calendar.get_jewish_date();
         let day = jewish_date.get_jewish_day_of_month();
         let month = jewish_date.get_jewish_month();
         let day_of_week = jewish_date.get_day_of_week();
 
-        if day_of_week == DayOfWeek::Saturday
+        if day_of_week == DayOfWeek::Shabbos
             || (!self.tachanun_recited_sundays && day_of_week == DayOfWeek::Sunday)
             || (!self.tachanun_recited_fridays && day_of_week == DayOfWeek::Friday)
             || month == JewishMonth::Nissan
@@ -137,16 +105,16 @@ impl TefilaRulesTrait for TefilaRules {
                 && !self.tachanun_recited_15_iyar_out_of_israel
                 && month == JewishMonth::Iyar
                 && day == 15)
-            || holiday_index == Some(JewishHoliday::TishaBeav)
+            || holiday_index == Some(JewishHoliday::TishahBav)
             || jewish_calendar.is_isru_chag()
             || jewish_calendar.is_rosh_chodesh()
             || (!self.tachanun_recited_shivas_yemei_hamiluim
                 && ((!jewish_date.is_jewish_leap_year() && month == JewishMonth::Adar)
-                    || (jewish_date.is_jewish_leap_year() && month == JewishMonth::Adarii))
+                    || (jewish_date.is_jewish_leap_year() && month == JewishMonth::AdarII))
                 && day > 22)
             || (!self.tachanun_recited_week_of_purim
                 && ((!jewish_date.is_jewish_leap_year() && month == JewishMonth::Adar)
-                    || (jewish_date.is_jewish_leap_year() && month == JewishMonth::Adarii))
+                    || (jewish_date.is_jewish_leap_year() && month == JewishMonth::AdarII))
                 && day > 10
                 && day < 18)
             || (jewish_calendar.get_is_use_modern_holidays()
@@ -162,13 +130,13 @@ impl TefilaRulesTrait for TefilaRules {
         true
     }
 
-    fn is_tachanun_recited_mincha(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_tachanun_recited_mincha(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         // Create tomorrow's date by adding 1 day
         let jewish_date = jewish_calendar.get_jewish_date();
         let greg_date = jewish_date.get_gregorian_date();
 
-        // Convert to chrono NaiveDate and add 1 day
         let year = greg_date.year().extended_year();
+        // Convert to chrono NaiveDate and add 1 day
         let month = greg_date.month().ordinal as u32;
         let day = greg_date.day_of_month().0 as u32;
 
@@ -209,14 +177,14 @@ impl TefilaRulesTrait for TefilaRules {
                 && tomorrow_yom_tov != Some(JewishHoliday::ErevYomKippur)
                 && tomorrow_yom_tov != Some(JewishHoliday::PesachSheni))
             || (!self.tachanun_recited_mincha_erev_lag_baomer
-                && tomorrow_yom_tov == Some(JewishHoliday::LagBaomer))
+                && tomorrow_yom_tov == Some(JewishHoliday::LagBomer))
         {
             return false;
         }
         true
     }
 
-    fn is_hallel_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_hallel_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         let jewish_date = jewish_calendar.get_jewish_date();
         let day = jewish_date.get_jewish_day_of_month();
         let month = jewish_date.get_jewish_month();
@@ -262,7 +230,7 @@ impl TefilaRulesTrait for TefilaRules {
         false
     }
 
-    fn is_hallel_shalem_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_hallel_shalem_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         let jewish_date = jewish_calendar.get_jewish_date();
         let day = jewish_date.get_jewish_day_of_month();
         let month = jewish_date.get_jewish_month();
@@ -281,11 +249,11 @@ impl TefilaRulesTrait for TefilaRules {
         false
     }
 
-    fn is_al_hanissim_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_al_hanissim_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_purim() || jewish_calendar.is_chanukah()
     }
 
-    fn is_yaaleh_veyavo_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_yaaleh_veyavo_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_pesach()
             || jewish_calendar.is_shavuos()
             || jewish_calendar.is_rosh_hashana()
@@ -296,7 +264,7 @@ impl TefilaRulesTrait for TefilaRules {
             || jewish_calendar.is_rosh_chodesh()
     }
 
-    fn is_mizmor_lesoda_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_mizmor_lesoda_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         if jewish_calendar.is_assur_bemelacha() {
             return false;
         }
@@ -312,35 +280,38 @@ impl TefilaRulesTrait for TefilaRules {
         true
     }
 
-    fn is_vesein_tal_umatar_start_date(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_vesein_tal_umatar_start_date(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_vesein_tal_umatar_start_date()
     }
 
-    fn is_vesein_tal_umatar_starting_tonight(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_vesein_tal_umatar_starting_tonight(
+        &self,
+        jewish_calendar: &impl JewishCalendarTrait,
+    ) -> bool {
         jewish_calendar.is_vesein_tal_umatar_starting_tonight()
     }
 
-    fn is_vesein_tal_umatar_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_vesein_tal_umatar_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_vesein_tal_umatar_recited()
     }
 
-    fn is_vesein_beracha_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_vesein_beracha_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_vesein_beracha_recited()
     }
 
-    fn is_mashiv_haruach_start_date(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_mashiv_haruach_start_date(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_mashiv_haruach_start_date()
     }
 
-    fn is_mashiv_haruach_end_date(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_mashiv_haruach_end_date(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_mashiv_haruach_end_date()
     }
 
-    fn is_mashiv_haruach_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_mashiv_haruach_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_mashiv_haruach_recited()
     }
 
-    fn is_morid_hatal_recited(&self, jewish_calendar: &JewishCalendar) -> bool {
+    fn is_morid_hatal_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool {
         jewish_calendar.is_morid_hatal_recited()
     }
 }

@@ -9,10 +9,10 @@ pub mod jni {
 
     use crate::{
         astronomical_calendar::AstronomicalCalendar,
-        constants::JewishMonth,
+        constants::{JewishDateTrait, JewishMonth},
         geolocation::GeoLocation,
         jewish_calendar::JewishCalendar,
-        jewish_date::{JewishDate, JewishDateTrait},
+        jewish_date::JewishDate,
         zmanim_calendar::ZmanimCalendar,
     };
     pub static DEFAULT_TEST_ITERATIONS: i32 = 1000;
@@ -668,7 +668,7 @@ pub mod jni {
             10 => JewishMonth::Teves,
             11 => JewishMonth::Shevat,
             12 => JewishMonth::Adar,
-            13 => JewishMonth::Adarii,
+            13 => JewishMonth::AdarII,
             _ => unreachable!(),
         };
         let day = rng.gen_range(1..=30);

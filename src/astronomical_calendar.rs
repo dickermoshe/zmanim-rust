@@ -1,10 +1,6 @@
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 
-use crate::{
-    constants::*,
-    geolocation::{GeoLocation, GeoLocationTrait},
-    noaa_calculator::{NOAACalculator, NOAACalculatorTrait},
-};
+use crate::{constants::*, geolocation::GeoLocation, noaa_calculator::NOAACalculator};
 /// TODO ADD DOCS
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct AstronomicalCalendar<Tz: TimeZone> {
@@ -40,76 +36,17 @@ impl<Tz: TimeZone> AstronomicalCalendar<Tz> {
         }
     }
 }
-pub trait AstronomicalCalendarTrait<Tz: TimeZone> {
-    fn get_date_time(&self) -> &DateTime<Tz>;
-    fn get_geo_location(&self) -> &GeoLocation;
-    fn get_noaa_calculator(&self) -> &NOAACalculator;
-
-    fn get_sunrise(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sea_level_sunrise(&self) -> Option<DateTime<Tz>>;
-
-    fn get_begin_civil_twilight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_begin_nautical_twilight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_begin_astronomical_twilight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sunset(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sea_level_sunset(&self) -> Option<DateTime<Tz>>;
-
-    fn get_end_civil_twilight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_end_nautical_twilight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_end_astronomical_twilight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sunrise_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>>;
-    fn get_sunset_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>>;
-
-    fn get_utc_sunrise(&self, zenith: f64) -> Option<f64>;
-
-    fn get_utc_sea_level_sunrise(&self, zenith: f64) -> Option<f64>;
-
-    fn get_utc_sunset(&self, zenith: f64) -> Option<f64>;
-
-    fn get_utc_sea_level_sunset(&self, zenith: f64) -> Option<f64>;
-
-    fn get_temporal_hour(&self) -> Option<Duration>;
-    fn get_temporal_hour_from_times(
-        &self,
-        start_of_day: &DateTime<Tz>,
-        end_of_day: &DateTime<Tz>,
-    ) -> Option<Duration>;
-
-    fn get_sun_transit(&self) -> Option<DateTime<Tz>>;
-
-    fn get_solar_midnight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sun_transit_from_times(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>>;
-
-    fn get_date_from_time(
-        &self,
-        calculated_time: f64,
-        solar_event: _SolarEvent,
-    ) -> Option<DateTime<Tz>>;
-}
 
 impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz> for AstronomicalCalendar<Tz> {
     fn get_date_time(&self) -> &DateTime<Tz> {
         &self.date_time
     }
 
-    fn get_geo_location(&self) -> &GeoLocation {
+    fn get_geo_location(&self) -> &impl GeoLocationTrait {
         &self.geo_location
     }
 
-    fn get_noaa_calculator(&self) -> &NOAACalculator {
+    fn get_noaa_calculator(&self) -> &impl NOAACalculatorTrait {
         &self.noaa_calculator
     }
     fn get_sunrise(&self) -> Option<DateTime<Tz>> {
@@ -299,7 +236,7 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz> for AstronomicalCalendar<Tz> {
         let seconds = calculated_time as i64;
         calculated_time -= seconds as f64;
 
-        let local_time_hours = (self.get_geo_location().longitude / 15.0) as i64;
+        let local_time_hours = (self.get_geo_location().get_longitude() / 15.0) as i64;
         if solar_event == _SolarEvent::Sunrise && local_time_hours + hours > 18 {
             cal -= chrono::Duration::days(1);
         } else if solar_event == _SolarEvent::Sunset && local_time_hours + hours < 6 {

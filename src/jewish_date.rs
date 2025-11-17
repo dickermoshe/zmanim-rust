@@ -18,50 +18,23 @@ pub struct MoladData {
     pub minutes: i64,
     pub chalakim: i64,
 }
-pub trait JewishDateTrait: Sized {
-    fn from_hebrew_date(year: i64, month: JewishMonth, day: i64) -> Option<Self>;
-    fn from_gregorian_date(year: i64, month: u8, day: u8) -> Option<Self>;
 
-    fn _get_molad(&self) -> Option<(impl JewishDateTrait, MoladData)>;
-    fn get_jewish_year(&self) -> i64;
-
-    fn get_jewish_month(&self) -> JewishMonth;
-
-    fn get_jewish_day_of_month(&self) -> i64;
-
-    fn get_gregorian_year(&self) -> i64;
-
-    fn get_gregorian_month(&self) -> i64;
-
-    fn get_gregorian_day_of_month(&self) -> i64;
-
-    fn get_day_of_week(&self) -> DayOfWeek;
-
-    fn is_jewish_leap_year(&self) -> bool;
-
-    fn get_days_in_jewish_year(&self) -> i64;
-
-    fn get_days_in_jewish_month(&self) -> i64;
-
-    fn is_cheshvan_long(&self) -> bool;
-
-    fn is_kislev_short(&self) -> bool;
-
-    fn get_cheshvan_kislev_kviah(&self) -> YearLengthType;
-
-    fn get_days_since_start_of_jewish_year(&self) -> i64;
-
-    fn get_chalakim_since_molad_tohu(&self) -> i64;
-
-    fn get_molad_as_date(&self) -> Option<impl JewishDateTrait>;
-
-    fn get_molad(&self) -> Option<MoladData>;
-    fn get_jewish_calendar_elapsed_days(year: i64) -> i64;
-    fn get_days_in_jewish_year_static(year: i64) -> i64;
-    fn get_last_day_of_gregorian_month(month: i64, year: i64) -> i64;
+impl MoladDataTrait for MoladData {
+    fn get_hours(&self) -> i64 {
+        self.hours
+    }
+    fn get_minutes(&self) -> i64 {
+        self.minutes
+    }
+    fn get_chalakim(&self) -> i64 {
+        self.chalakim
+    }
 }
 
 impl JewishDateTrait for JewishDate {
+    fn get_gregorian_date(&self) -> Date<Gregorian> {
+        self.get_hebrew_date().to_calendar(Gregorian)
+    }
     fn get_days_in_jewish_year_static(year: i64) -> i64 {
         JewishDate::get_jewish_calendar_elapsed_days(year + 1)
             - JewishDate::get_jewish_calendar_elapsed_days(year)
@@ -76,7 +49,7 @@ impl JewishDateTrait for JewishDate {
             "M05" => JewishMonth::Shevat,
             "M05L" => JewishMonth::Adar,
             "M06" => JewishMonth::Adar,
-            "M06L" => JewishMonth::Adarii,
+            "M06L" => JewishMonth::AdarII,
             "M07" => JewishMonth::Nissan,
             "M08" => JewishMonth::Iyar,
             "M09" => JewishMonth::Sivan,
@@ -114,7 +87,7 @@ impl JewishDateTrait for JewishDate {
             Weekday::Wednesday => DayOfWeek::Wednesday,
             Weekday::Thursday => DayOfWeek::Thursday,
             Weekday::Friday => DayOfWeek::Friday,
-            Weekday::Saturday => DayOfWeek::Saturday,
+            Weekday::Saturday => DayOfWeek::Shabbos,
         }
     }
 
@@ -172,7 +145,7 @@ impl JewishDateTrait for JewishDate {
         Some(date)
     }
 
-    fn get_molad(&self) -> Option<MoladData> {
+    fn get_molad(&self) -> Option<impl MoladDataTrait> {
         let (_, molad) = self._get_molad()?;
         Some(molad)
     }
@@ -196,7 +169,7 @@ impl JewishDateTrait for JewishDate {
                 JewishMonth::Teves => "M04",
                 JewishMonth::Shevat => "M05",
                 JewishMonth::Adar => "M05L",
-                JewishMonth::Adarii => "M06",
+                JewishMonth::AdarII => "M06",
                 JewishMonth::Nissan => "M07",
                 JewishMonth::Iyar => "M08",
                 JewishMonth::Sivan => "M09",
@@ -240,7 +213,7 @@ impl JewishDateTrait for JewishDate {
         })
     }
 
-    fn _get_molad(&self) -> Option<(impl JewishDateTrait, MoladData)> {
+    fn _get_molad(&self) -> Option<(impl JewishDateTrait, impl MoladDataTrait)> {
         let chalakim_since_molad_tohu = self.get_chalakim_since_molad_tohu();
         let abs_date = Self::molad_to_abs_date(chalakim_since_molad_tohu);
         let mut gregorian_date = Self::abs_date_to_date(abs_date)?;
@@ -405,7 +378,7 @@ impl JewishDate {
                     29
                 }
             }
-            JewishMonth::Adarii => 29,
+            JewishMonth::AdarII => 29,
             _ => 30,
         }
     }
@@ -855,14 +828,21 @@ mod jni_tests {
                 .unwrap();
             let java_chalakim = jvm.to_rust::<i64>(java_chalakim).unwrap();
 
-            assert_eq!(rust_molad.hours, java_hours, "Hours mismatch: {}", message);
             assert_eq!(
-                rust_molad.minutes, java_minutes,
+                rust_molad.get_hours(),
+                java_hours,
+                "Hours mismatch: {}",
+                message
+            );
+            assert_eq!(
+                rust_molad.get_minutes(),
+                java_minutes,
                 "Minutes mismatch: {}",
                 message
             );
             assert_eq!(
-                rust_molad.chalakim, java_chalakim,
+                rust_molad.get_chalakim(),
+                java_chalakim,
                 "Chalakim mismatch: {}",
                 message
             );
