@@ -41,6 +41,7 @@ default-features = false
 git = "https://github.com/astonbitecode/j4rs"
 rev = "478273"
 
-# [workspace]
-# members = [".", "example"]
-# resolver = "2"
+
+[lib]
+name = "jew_sdk"
+crate-type = ["cdylib"]

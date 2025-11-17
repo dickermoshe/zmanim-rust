@@ -1,6 +1,5 @@
-use core::fmt::Debug;
-
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use core::fmt::Debug;
 use icu_calendar::{Date, Gregorian};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
@@ -427,7 +426,7 @@ impl JewishHoliday {
     }
 }
 #[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
-#[repr(i64)]
+#[repr(u8)]
 pub enum DayOfWeek {
     Sunday = 1,
     Monday = 2,
@@ -462,7 +461,7 @@ impl DayOfWeek {
     }
 }
 #[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
-#[repr(i64)]
+#[repr(u8)]
 pub enum JewishMonth {
     Nissan = 1,
     Iyar = 2,
@@ -824,8 +823,8 @@ pub trait GeoLocationTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync
     fn get_geodesic_initial_bearing(&self, location: &impl GeoLocationTrait) -> Option<f64>;
     fn get_geodesic_final_bearing(&self, location: &impl GeoLocationTrait) -> Option<f64>;
     fn get_geodesic_distance(&self, location: &impl GeoLocationTrait) -> Option<f64>;
-    fn get_local_mean_time_offset<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i64;
-    fn get_antimeridian_adjustment<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i64;
+    fn get_local_mean_time_offset<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> Duration;
+    fn get_antimeridian_adjustment<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i8;
 }
 
 pub trait BavliDafTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync {
@@ -888,30 +887,30 @@ pub trait MoladDataTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync {
 }
 
 pub trait JewishDateTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync {
-    fn from_hebrew_date(year: i64, month: JewishMonth, day: i64) -> Option<Self>;
-    fn from_gregorian_date(year: i64, month: u8, day: u8) -> Option<Self>;
+    fn from_hebrew_date(year: i32, month: JewishMonth, day: u8) -> Option<Self>;
+    fn from_gregorian_date(year: i32, month: u8, day: u8) -> Option<Self>;
     fn get_gregorian_date(&self) -> Date<Gregorian>;
 
     fn _get_molad(&self) -> Option<(impl JewishDateTrait, impl MoladDataTrait)>;
-    fn get_jewish_year(&self) -> i64;
+    fn get_jewish_year(&self) -> i32;
 
     fn get_jewish_month(&self) -> JewishMonth;
 
-    fn get_jewish_day_of_month(&self) -> i64;
+    fn get_jewish_day_of_month(&self) -> u8;
 
-    fn get_gregorian_year(&self) -> i64;
+    fn get_gregorian_year(&self) -> i32;
 
-    fn get_gregorian_month(&self) -> i64;
+    fn get_gregorian_month(&self) -> u8;
 
-    fn get_gregorian_day_of_month(&self) -> i64;
+    fn get_gregorian_day_of_month(&self) -> u8;
 
     fn get_day_of_week(&self) -> DayOfWeek;
 
     fn is_jewish_leap_year(&self) -> bool;
 
-    fn get_days_in_jewish_year(&self) -> i64;
+    fn get_days_in_jewish_year(&self) -> i32;
 
-    fn get_days_in_jewish_month(&self) -> i64;
+    fn get_days_in_jewish_month(&self) -> u8;
 
     fn is_cheshvan_long(&self) -> bool;
 
@@ -919,16 +918,16 @@ pub trait JewishDateTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync 
 
     fn get_cheshvan_kislev_kviah(&self) -> YearLengthType;
 
-    fn get_days_since_start_of_jewish_year(&self) -> i64;
+    fn get_days_since_start_of_jewish_year(&self) -> i32;
 
     fn get_chalakim_since_molad_tohu(&self) -> i64;
 
     fn get_molad_as_date(&self) -> Option<impl JewishDateTrait>;
 
     fn get_molad(&self) -> Option<impl MoladDataTrait>;
-    fn get_jewish_calendar_elapsed_days(year: i64) -> i64;
-    fn get_days_in_jewish_year_static(year: i64) -> i64;
-    fn get_last_day_of_gregorian_month(month: i64, year: i64) -> i64;
+    fn get_jewish_calendar_elapsed_days(year: i32) -> i32;
+    fn get_days_in_jewish_year_static(year: i32) -> i32;
+    fn get_last_day_of_gregorian_month(month: u8, year: i32) -> u8;
 }
 
 pub trait AstronomicalCalendarTrait<Tz: TimeZone>: Sized + Clone {
@@ -989,6 +988,8 @@ pub trait AstronomicalCalendarTrait<Tz: TimeZone>: Sized + Clone {
         calculated_time: f64,
         solar_event: _SolarEvent,
     ) -> Option<DateTime<Tz>>;
+
+    fn get_local_mean_time(&self, hours: f64) -> Option<DateTime<Tz>>;
 }
 
 pub trait TefilaRulesTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync {
@@ -1067,12 +1068,12 @@ pub trait JewishCalendarTrait: Debug + Clone + PartialEq + PartialOrd + Send + S
     fn is_taanis(&self) -> bool;
 
     fn is_taanis_bechoros(&self) -> bool;
-    fn get_day_of_chanukah(&self) -> i64;
+    fn get_day_of_chanukah(&self) -> Option<u8>;
     fn is_chanukah(&self) -> bool;
 
     fn is_purim(&self) -> bool;
 
-    fn get_day_of_omer(&self) -> i64;
+    fn get_day_of_omer(&self) -> Option<u8>;
 
     fn is_tisha_beav(&self) -> bool;
 

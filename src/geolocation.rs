@@ -1,5 +1,5 @@
-use crate::constants::{_Formula, _HOUR_MILLIS, _MINUTE_MILLIS, GeoLocationTrait};
-use chrono::{DateTime, Offset, TimeZone};
+use crate::constants::{_Formula, _MINUTE_MILLIS, GeoLocationTrait};
+use chrono::{DateTime, Duration, Offset, TimeZone};
 use core::f64::consts::PI;
 use libm::{atan, atan2, cos, log, sin, sqrt, tan};
 
@@ -71,18 +71,18 @@ impl GeoLocationTrait for GeoLocation {
         self.vincenty_inverse_formula(location, _Formula::Distance)
     }
 
-    fn get_local_mean_time_offset<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i64 {
+    fn get_local_mean_time_offset<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> Duration {
         let longitude_offset_ms = self.get_longitude() * 4.0 * _MINUTE_MILLIS as f64;
         let timezone_offset_sec = date.offset().fix().local_minus_utc();
         let timezone_offset_ms = timezone_offset_sec as f64 * 1000.0;
-        (longitude_offset_ms - timezone_offset_ms) as i64
+        Duration::milliseconds((longitude_offset_ms - timezone_offset_ms) as i64)
     }
 
-    fn get_antimeridian_adjustment<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i64 {
-        let local_hours_offset = self.get_local_mean_time_offset(date) as f64 / _HOUR_MILLIS as f64;
-        if local_hours_offset >= 20.0 {
+    fn get_antimeridian_adjustment<Tz: TimeZone>(&self, date: &DateTime<Tz>) -> i8 {
+        let local_hours_offset = self.get_local_mean_time_offset(date);
+        if local_hours_offset >= Duration::hours(20) {
             return 1;
-        } else if local_hours_offset <= -20.0 {
+        } else if local_hours_offset <= Duration::hours(-20) {
             return -1;
         }
         0
@@ -219,7 +219,7 @@ impl GeoLocation {
 mod jni_tests {
     use crate::test_utils::jni::{
         DEFAULT_TEST_EPSILON, assert_almost_equal_f64, assert_almost_equal_f64_option,
-        create_random_geolocations, init_jvm,
+        create_date_times_with_geolocation, create_random_geolocations, init_jvm,
     };
 
     use super::*;
@@ -243,8 +243,7 @@ mod jni_tests {
         jvm.to_rust::<f64>(result).unwrap()
     }
 
-    #[test]
-    fn test_rhumb_line_distance() {
+    fn f64_tester(fn_to_test: impl Fn(&GeoLocation, &GeoLocation) -> f64, method: &str) {
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
             let test_case = create_random_geolocations(&jvm, "UTC");
@@ -253,25 +252,25 @@ mod jni_tests {
                 if let Some((other_geo_location, other_java_geo_location, other_message)) =
                     other_test_case
                 {
-                    let distance = geo_location.get_rhumb_line_distance(&other_geo_location);
-                    let java_distance = invoke_method(
-                        &jvm,
-                        &java_geo_location,
-                        "getRhumbLineDistance",
-                        other_java_geo_location,
-                    );
-                    assert!(
-                        (distance - java_distance).abs() < DEFAULT_TEST_EPSILON,
-                        "getRhumbLineDistance from {} to {} failed",
-                        message,
-                        other_message
+                    let distance = fn_to_test(&geo_location, &other_geo_location);
+                    let java_distance =
+                        invoke_method(&jvm, &java_geo_location, method, other_java_geo_location);
+                    let message =
+                        format!("{} from {} to {} failed", method, message, other_message);
+                    assert_almost_equal_f64(
+                        distance,
+                        java_distance,
+                        DEFAULT_TEST_EPSILON,
+                        &message,
                     );
                 }
             }
         }
     }
-    #[test]
-    fn test_rhumb_line_bearing() {
+    fn f64_option_tester(
+        fn_to_test: impl Fn(&GeoLocation, &GeoLocation) -> Option<f64>,
+        method: &str,
+    ) {
         let jvm = init_jvm();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
             let test_case = create_random_geolocations(&jvm, "UTC");
@@ -280,131 +279,124 @@ mod jni_tests {
                 if let Some((other_geo_location, other_java_geo_location, other_message)) =
                     other_test_case
                 {
-                    let bearing = geo_location.get_rhumb_line_bearing(&other_geo_location);
-                    let java_bearing = invoke_method(
-                        &jvm,
-                        &java_geo_location,
-                        "getRhumbLineBearing",
-                        other_java_geo_location,
+                    let distance = fn_to_test(&geo_location, &other_geo_location);
+                    let java_result =
+                        invoke_method(&jvm, &java_geo_location, method, other_java_geo_location);
+                    let java_result = if java_result.is_nan() {
+                        None
+                    } else {
+                        Some(java_result)
+                    };
+                    let message =
+                        format!("{} from {} to {} failed", method, message, other_message);
+                    assert_almost_equal_f64_option(
+                        &distance,
+                        &java_result,
+                        DEFAULT_TEST_EPSILON,
+                        &message,
                     );
-                    let message = format!(
-                        "getRhumbLineBearing from {} to {} failed",
-                        message, other_message
-                    );
-                    assert_almost_equal_f64(bearing, java_bearing, DEFAULT_TEST_EPSILON, &message);
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_rhumb_line_distance() {
+        f64_tester(GeoLocation::get_rhumb_line_distance, "getRhumbLineDistance");
+    }
+    #[test]
+    fn test_rhumb_line_bearing() {
+        f64_tester(GeoLocation::get_rhumb_line_bearing, "getRhumbLineBearing");
     }
 
     #[test]
     fn test_get_geodesic_initial_bearing() {
-        let jvm = init_jvm();
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_random_geolocations(&jvm, "UTC");
-            let other_test_case = create_random_geolocations(&jvm, "UTC");
-            if let Some((geo_location, java_geo_location, message)) = test_case {
-                if let Some((other_geo_location, other_java_geo_location, other_message)) =
-                    other_test_case
-                {
-                    let message = format!(
-                        "getGeodesicInitialBearing from {} to {} failed",
-                        message, other_message
-                    );
-                    let bearing = geo_location.get_geodesic_initial_bearing(&other_geo_location);
-                    let java_bearing = invoke_method(
-                        &jvm,
-                        &java_geo_location,
-                        "getGeodesicInitialBearing",
-                        other_java_geo_location,
-                    );
-                    let java_bearing = if java_bearing.is_nan() {
-                        None
-                    } else {
-                        Some(java_bearing)
-                    };
-                    assert_almost_equal_f64_option(
-                        &bearing,
-                        &java_bearing,
-                        DEFAULT_TEST_EPSILON,
-                        &message,
-                    );
-                }
-            }
-        }
+        f64_option_tester(
+            GeoLocation::get_geodesic_initial_bearing,
+            "getGeodesicInitialBearing",
+        );
     }
 
     #[test]
     fn test_get_geodesic_final_bearing() {
-        let jvm = init_jvm();
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_random_geolocations(&jvm, "UTC");
-            let other_test_case = create_random_geolocations(&jvm, "UTC");
-            if let Some((geo_location, java_geo_location, message)) = test_case {
-                if let Some((other_geo_location, other_java_geo_location, other_message)) =
-                    other_test_case
-                {
-                    let message = format!(
-                        "getGeodesicFinalBearing from {} to {} failed",
-                        message, other_message
-                    );
-                    let bearing = geo_location.get_geodesic_final_bearing(&other_geo_location);
-                    let java_bearing = invoke_method(
-                        &jvm,
-                        &java_geo_location,
-                        "getGeodesicFinalBearing",
-                        other_java_geo_location,
-                    );
-                    let java_bearing = if java_bearing.is_nan() {
-                        None
-                    } else {
-                        Some(java_bearing)
-                    };
-                    assert_almost_equal_f64_option(
-                        &bearing,
-                        &java_bearing,
-                        DEFAULT_TEST_EPSILON,
-                        &message,
-                    );
-                }
-            }
-        }
+        f64_option_tester(
+            GeoLocation::get_geodesic_final_bearing,
+            "getGeodesicFinalBearing",
+        );
     }
 
     #[test]
     fn test_get_geodesic_distance() {
+        f64_option_tester(GeoLocation::get_geodesic_distance, "getGeodesicDistance");
+    }
+
+    #[test]
+    fn test_get_local_mean_time_offset() {
         let jvm = init_jvm();
+        let mut ran = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_random_geolocations(&jvm, "UTC");
-            let other_test_case = create_random_geolocations(&jvm, "UTC");
-            if let Some((geo_location, java_geo_location, message)) = test_case {
-                if let Some((other_geo_location, other_java_geo_location, other_message)) =
-                    other_test_case
-                {
-                    let message = format!(
-                        "getGeodesicDistance from {} to {} failed",
-                        message, other_message
-                    );
-                    let distance = geo_location.get_geodesic_distance(&other_geo_location);
-                    let java_distance = invoke_method(
-                        &jvm,
-                        &java_geo_location,
-                        "getGeodesicDistance",
-                        other_java_geo_location,
-                    );
-                    let java_distance = if java_distance.is_nan() {
-                        None
-                    } else {
-                        Some(java_distance)
-                    };
-                    assert_almost_equal_f64_option(
-                        &distance,
-                        &java_distance,
-                        DEFAULT_TEST_EPSILON,
-                        &message,
-                    );
-                }
+            let test_case = create_date_times_with_geolocation(&jvm);
+            if test_case.is_none() {
+                continue;
             }
+            ran = true;
+
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+
+            let rust_offset = geo_location.get_local_mean_time_offset(&date_time);
+            let rust_offset_ms = rust_offset.num_milliseconds();
+
+            let result = jvm
+                .invoke(
+                    &java_geo_location,
+                    "getLocalMeanTimeOffset",
+                    &[InvocationArg::from(java_calendar)],
+                )
+                .unwrap();
+            let java_offset_ms = jvm.to_rust::<i64>(result).unwrap();
+
+            let error_message = format!("getLocalMeanTimeOffset failed for {}", message);
+            assert_almost_equal_f64(
+                rust_offset_ms as f64,
+                java_offset_ms as f64,
+                DEFAULT_TEST_EPSILON,
+                &error_message,
+            );
         }
+        assert!(ran, "No test cases were run");
+    }
+
+    #[test]
+    fn test_get_antimeridian_adjustment() {
+        let jvm = init_jvm();
+        let mut ran = false;
+        for _ in 0..DEFAULT_TEST_ITERATIONS {
+            let test_case = create_date_times_with_geolocation(&jvm);
+            if test_case.is_none() {
+                continue;
+            }
+            ran = true;
+
+            let (date_time, java_calendar, geo_location, java_geo_location, message) =
+                test_case.unwrap();
+
+            let rust_adjustment = geo_location.get_antimeridian_adjustment(&date_time);
+            let result = jvm
+                .invoke(
+                    &java_geo_location,
+                    "getAntimeridianAdjustment",
+                    &[InvocationArg::from(java_calendar)],
+                )
+                .unwrap();
+            let java_adjustment = jvm.to_rust::<i32>(result).unwrap() as i8;
+
+            assert_eq!(
+                rust_adjustment, java_adjustment,
+                "getAntimeridianAdjustment failed for {}",
+                message
+            );
+        }
+        assert!(ran, "No test cases were run");
     }
 }

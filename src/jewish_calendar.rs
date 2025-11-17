@@ -23,7 +23,7 @@ pub struct JewishCalendar {
 
 impl JewishCalendar {
     pub fn from_gregorian_date(
-        year: i64,
+        year: i32,
         month: u8,
         day: u8,
         in_israel: bool,
@@ -41,9 +41,9 @@ impl JewishCalendar {
     }
 
     pub fn from_hebrew_date(
-        year: i64,
+        year: i32,
         month: JewishMonth,
-        day: i64,
+        day: u8,
         in_israel: bool,
         is_mukaf_choma: bool,
         use_modern_holidays: bool,
@@ -63,14 +63,11 @@ impl JewishCalendar {
         &self.jewish_date
     }
     fn get_num_of_special_days(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u64> {
-        let start_year = JewishDate::from_gregorian_date(
-            start.year() as i64,
-            start.month() as u8,
-            start.day() as u8,
-        )?
-        .get_jewish_year();
+        let start_year =
+            JewishDate::from_gregorian_date(start.year(), start.month() as u8, start.day() as u8)?
+                .get_jewish_year();
         let end_year =
-            JewishDate::from_gregorian_date(end.year() as i64, end.month() as u8, end.day() as u8)?
+            JewishDate::from_gregorian_date(end.year(), end.month() as u8, end.day() as u8)?
                 .get_jewish_year();
 
         let mut special_days = 0u64;
@@ -576,20 +573,20 @@ impl JewishCalendarTrait for JewishCalendar {
             && ((day == 14 && day_of_week != 7) || (day == 12 && day_of_week == 5))
     }
 
-    fn get_day_of_chanukah(&self) -> i64 {
+    fn get_day_of_chanukah(&self) -> Option<u8> {
         if !self.is_chanukah() {
-            return -1;
+            return None;
         }
 
         let month = self.jewish_date.get_jewish_month() as i32;
         let day = self.jewish_date.get_jewish_day_of_month();
 
         if month == JewishMonth::Kislev as i32 {
-            day - 24
+            Some(day - 24)
         } else if self.jewish_date.is_kislev_short() {
-            day + 5
+            Some(day + 5)
         } else {
-            day + 6
+            Some(day + 6)
         }
     }
 
@@ -598,6 +595,8 @@ impl JewishCalendarTrait for JewishCalendar {
     }
 
     fn is_purim(&self) -> bool {
+        // TODO: It is silly that we return false here but get PURIM when askimg for the index
+        // even when in a mukaf choma.
         let holiday_index = self.get_yom_tov_index();
         if self.is_mukaf_choma {
             return holiday_index == Some(JewishHoliday::ShushanPurim);
@@ -606,18 +605,18 @@ impl JewishCalendarTrait for JewishCalendar {
         }
     }
 
-    fn get_day_of_omer(&self) -> i64 {
+    fn get_day_of_omer(&self) -> Option<u8> {
         let month = self.jewish_date.get_jewish_month() as i32;
         let day = self.jewish_date.get_jewish_day_of_month();
 
         if month == JewishMonth::Nissan as i32 && day >= 16 {
-            day - 15
+            Some(day - 15)
         } else if month == JewishMonth::Iyar as i32 {
-            day + 15
+            Some(day + 15)
         } else if month == JewishMonth::Sivan as i32 && day < 6 {
-            day + 44
+            Some(day + 44)
         } else {
-            -1
+            None
         }
     }
 
@@ -779,7 +778,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let elapsed_days =
             JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year());
         let elapsed_days = elapsed_days + self.jewish_date.get_days_since_start_of_jewish_year();
-        let cycle_length = 10227i64;
+        let cycle_length = 10227i32;
         (elapsed_days % cycle_length) == 172
     }
 
@@ -848,7 +847,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let days_to_shabbos = if day_of_week == DayOfWeek::Shabbos {
             7 // If today is Shabbos, get next Shabbos
         } else {
-            ((DayOfWeek::Shabbos as i64 - day_of_week as i64 + 7) % 7) as i64
+            ((DayOfWeek::Shabbos as u8 - day_of_week as u8 + 7) % 7) as u8
         };
 
         // Create a new calendar for the upcoming Shabbos
@@ -871,7 +870,7 @@ impl JewishCalendarTrait for JewishCalendar {
                 }
                 JewishMonth::AdarII => JewishMonth::Nissan,
                 _ => {
-                    let month_num: i64 = upcoming_month.into();
+                    let month_num: u8 = upcoming_month.into();
                     (month_num + 1).try_into().ok()?
                 }
             };
@@ -915,7 +914,7 @@ impl JewishCalendarTrait for JewishCalendar {
                     }
                     JewishMonth::AdarII => JewishMonth::Nissan,
                     _ => {
-                        let month_num: i64 = temp_month.into();
+                        let month_num: u8 = temp_month.into();
                         (month_num + 1).try_into().ok()?
                     }
                 };
@@ -1206,6 +1205,26 @@ mod jni_tests {
     use crate::test_utils::jni::{DEFAULT_TEST_ITERATIONS, create_jewish_calendars, init_jvm};
     use j4rs::InvocationArg;
 
+    fn bool_tester(fn_to_test: impl Fn(&JewishCalendar) -> bool, method: &str) {
+        let jvm = init_jvm();
+        let mut ran = false;
+        for _ in 0..DEFAULT_TEST_ITERATIONS {
+            let test_case = create_jewish_calendars(&jvm);
+            if test_case.is_none() {
+                continue;
+            }
+            ran = true;
+            let (rust_calendar, java_calendar, message) = test_case.unwrap();
+            let result = fn_to_test(&rust_calendar);
+            let java_result = jvm
+                .invoke(&java_calendar, method, InvocationArg::empty())
+                .unwrap();
+            let java_bool: bool = jvm.to_rust(java_result).unwrap();
+            assert_eq!(result, java_bool, "{}", message);
+        }
+        assert!(ran, "No test cases were run");
+    }
+
     #[test]
     fn test_get_yom_tov_index_against_java() {
         let jvm = init_jvm();
@@ -1233,23 +1252,7 @@ mod jni_tests {
     // Similar for other bool methods
     #[test]
     fn test_is_yom_tov_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_yom_tov();
-            let java_result = jvm
-                .invoke(&java_calendar, "isYomTov", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_yom_tov, "isYomTov");
     }
 
     #[test]
@@ -1268,7 +1271,8 @@ mod jni_tests {
                 .invoke(&java_calendar, "getDayOfChanukah", InvocationArg::empty())
                 .unwrap();
             let java_int: i64 = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_int, "{}", message);
+            let java_int = if java_int == -1 { None } else { Some(java_int) };
+            assert_eq!(result.map(|r| r as i64), java_int, "{}", message);
         }
         assert!(ran, "No test cases were run");
     }
@@ -1289,739 +1293,192 @@ mod jni_tests {
                 .invoke(&java_calendar, "getDayOfOmer", InvocationArg::empty())
                 .unwrap();
             let java_int: i64 = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_int, "{}", message);
+            let java_int = if java_int == -1 { None } else { Some(java_int) };
+            assert_eq!(result.map(|r| r as i64), java_int, "{}", message);
         }
         assert!(ran, "No test cases were run");
     }
 
     #[test]
     fn test_get_in_israel_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_in_israel();
-            let java_result = jvm
-                .invoke(&java_calendar, "getInIsrael", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::get_in_israel, "getInIsrael");
     }
 
     #[test]
     fn test_get_is_mukaf_choma_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_is_mukaf_choma();
-            let java_result = jvm
-                .invoke(&java_calendar, "getIsMukafChoma", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::get_is_mukaf_choma, "getIsMukafChoma");
     }
 
     #[test]
     fn test_get_is_use_modern_holidays_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_is_use_modern_holidays();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isUseModernHolidays",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::get_is_use_modern_holidays,
+            "isUseModernHolidays",
+        );
     }
 
     #[test]
     fn test_is_yom_tov_assur_bemelacha_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_yom_tov_assur_bemelacha();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isYomTovAssurBemelacha",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_yom_tov_assur_bemelacha,
+            "isYomTovAssurBemelacha",
+        );
     }
 
     #[test]
     fn test_is_assur_bemelacha_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_assur_bemelacha();
-            let java_result = jvm
-                .invoke(&java_calendar, "isAssurBemelacha", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_assur_bemelacha, "isAssurBemelacha");
     }
 
     #[test]
     fn test_has_candle_lighting_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.has_candle_lighting();
-            let java_result = jvm
-                .invoke(&java_calendar, "hasCandleLighting", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::has_candle_lighting, "hasCandleLighting");
     }
 
     #[test]
     fn test_is_tomorrow_shabbos_or_yom_tov_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_tomorrow_shabbos_or_yom_tov();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isTomorrowShabbosOrYomTov",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_tomorrow_shabbos_or_yom_tov,
+            "isTomorrowShabbosOrYomTov",
+        );
     }
 
     #[test]
     fn test_is_erev_yom_tov_sheni_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_erev_yom_tov_sheni();
-            let java_result = jvm
-                .invoke(&java_calendar, "isErevYomTovSheni", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_erev_yom_tov_sheni, "isErevYomTovSheni");
     }
 
     #[test]
     fn test_is_aseres_yemei_teshuva_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_aseres_yemei_teshuva();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isAseresYemeiTeshuva",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_aseres_yemei_teshuva,
+            "isAseresYemeiTeshuva",
+        );
     }
 
     #[test]
     fn test_is_pesach_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_pesach();
-            let java_result = jvm
-                .invoke(&java_calendar, "isPesach", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_pesach, "isPesach");
     }
 
     #[test]
     fn test_is_chol_hamoed_pesach_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_chol_hamoed_pesach();
-            let java_result = jvm
-                .invoke(&java_calendar, "isCholHamoedPesach", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_chol_hamoed_pesach, "isCholHamoedPesach");
     }
 
     #[test]
     fn test_is_shavuos_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_shavuos();
-            let java_result = jvm
-                .invoke(&java_calendar, "isShavuos", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_shavuos, "isShavuos");
     }
 
     #[test]
     fn test_is_rosh_hashana_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_rosh_hashana();
-            let java_result = jvm
-                .invoke(&java_calendar, "isRoshHashana", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_rosh_hashana, "isRoshHashana");
     }
 
     #[test]
     fn test_is_yom_kippur_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_yom_kippur();
-            let java_result = jvm
-                .invoke(&java_calendar, "isYomKippur", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_yom_kippur, "isYomKippur");
     }
 
     #[test]
     fn test_is_succos_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_succos();
-            let java_result = jvm
-                .invoke(&java_calendar, "isSuccos", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_succos, "isSuccos");
     }
 
     #[test]
     fn test_is_hoshana_rabba_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_hoshana_rabba();
-            let java_result = jvm
-                .invoke(&java_calendar, "isHoshanaRabba", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_hoshana_rabba, "isHoshanaRabba");
     }
 
     #[test]
     fn test_is_shemini_atzeres_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_shemini_atzeres();
-            let java_result = jvm
-                .invoke(&java_calendar, "isShminiAtzeres", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_shemini_atzeres, "isShminiAtzeres");
     }
 
     #[test]
     fn test_is_simchas_torah_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_simchas_torah();
-            let java_result = jvm
-                .invoke(&java_calendar, "isSimchasTorah", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_simchas_torah, "isSimchasTorah");
     }
 
     #[test]
     fn test_is_chol_hamoed_succos_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_chol_hamoed_succos();
-            let java_result = jvm
-                .invoke(&java_calendar, "isCholHamoedSuccos", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_chol_hamoed_succos, "isCholHamoedSuccos");
     }
 
     #[test]
     fn test_is_chol_hamoed_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_chol_hamoed();
-            let java_result = jvm
-                .invoke(&java_calendar, "isCholHamoed", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_chol_hamoed, "isCholHamoed");
     }
 
     #[test]
     fn test_is_erev_yom_tov_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_erev_yom_tov();
-            let java_result = jvm
-                .invoke(&java_calendar, "isErevYomTov", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_erev_yom_tov, "isErevYomTov");
     }
 
     #[test]
     fn test_is_rosh_chodesh_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_rosh_chodesh();
-            let java_result = jvm
-                .invoke(&java_calendar, "isRoshChodesh", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_rosh_chodesh, "isRoshChodesh");
     }
 
     #[test]
     fn test_is_isru_chag_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_isru_chag();
-            let java_result = jvm
-                .invoke(&java_calendar, "isIsruChag", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_isru_chag, "isIsruChag");
     }
 
     #[test]
     fn test_is_taanis_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_taanis();
-            let java_result = jvm
-                .invoke(&java_calendar, "isTaanis", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_taanis, "isTaanis");
     }
 
     #[test]
     fn test_is_taanis_bechoros_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_taanis_bechoros();
-            let java_result = jvm
-                .invoke(&java_calendar, "isTaanisBechoros", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_taanis_bechoros, "isTaanisBechoros");
     }
 
     #[test]
     fn test_is_chanukah_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_chanukah();
-            let java_result = jvm
-                .invoke(&java_calendar, "isChanukah", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_chanukah, "isChanukah");
     }
 
     #[test]
     fn test_is_purim_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_purim();
-            let java_result = jvm
-                .invoke(&java_calendar, "isPurim", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_purim, "isPurim");
     }
 
     #[test]
     fn test_is_tisha_beav_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_tisha_beav();
-            let java_result = jvm
-                .invoke(&java_calendar, "isTishaBav", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_tisha_beav, "isTishaBav");
     }
 
     #[test]
     fn test_is_birkas_hachamah_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_birkas_hachamah();
-            let java_result = jvm
-                .invoke(&java_calendar, "isBirkasHachamah", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_birkas_hachamah, "isBirkasHachamah");
     }
 
     #[test]
     fn test_is_erev_rosh_chodesh_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_erev_rosh_chodesh();
-            let java_result = jvm
-                .invoke(&java_calendar, "isErevRoshChodesh", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_erev_rosh_chodesh, "isErevRoshChodesh");
     }
 
     #[test]
     fn test_is_yom_kippur_katan_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_yom_kippur_katan();
-            let java_result = jvm
-                .invoke(&java_calendar, "isYomKippurKatan", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_yom_kippur_katan, "isYomKippurKatan");
     }
 
     #[test]
-    fn test_is_be_hab_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_be_hab();
-            let java_result = jvm
-                .invoke(&java_calendar, "isBeHaB", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+    fn test_is_behab_against_java() {
+        bool_tester(JewishCalendar::is_be_hab, "isBeHaB");
     }
 
     #[test]
     fn test_is_machar_chodesh_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_machar_chodesh();
-            let java_result = jvm
-                .invoke(&java_calendar, "isMacharChodesh", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_machar_chodesh, "isMacharChodesh");
     }
 
     #[test]
     fn test_is_shabbos_mevorchim_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_shabbos_mevorchim();
-            let java_result = jvm
-                .invoke(&java_calendar, "isShabbosMevorchim", InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(JewishCalendar::is_shabbos_mevorchim, "isShabbosMevorchim");
     }
 
     #[test]
@@ -2114,202 +1571,66 @@ mod jni_tests {
 
     #[test]
     fn test_is_vesein_tal_umatar_start_date_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_vesein_tal_umatar_start_date();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isVeseinTalUmatarStartDate",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_vesein_tal_umatar_start_date,
+            "isVeseinTalUmatarStartDate",
+        );
     }
 
     #[test]
     fn test_is_vesein_tal_umatar_starting_tonight_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_vesein_tal_umatar_starting_tonight();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isVeseinTalUmatarStartingTonight",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_vesein_tal_umatar_starting_tonight,
+            "isVeseinTalUmatarStartingTonight",
+        );
     }
 
     #[test]
     fn test_is_vesein_tal_umatar_recited_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_vesein_tal_umatar_recited();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isVeseinTalUmatarRecited",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_vesein_tal_umatar_recited,
+            "isVeseinTalUmatarRecited",
+        );
     }
 
     #[test]
     fn test_is_vesein_beracha_recited_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_vesein_beracha_recited();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isVeseinBerachaRecited",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_vesein_beracha_recited,
+            "isVeseinBerachaRecited",
+        );
     }
 
     #[test]
     fn test_is_mashiv_haruach_start_date_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_mashiv_haruach_start_date();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isMashivHaruachStartDate",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_mashiv_haruach_start_date,
+            "isMashivHaruachStartDate",
+        );
     }
 
     #[test]
     fn test_is_mashiv_haruach_end_date_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_mashiv_haruach_end_date();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isMashivHaruachEndDate",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_mashiv_haruach_end_date,
+            "isMashivHaruachEndDate",
+        );
     }
 
     #[test]
     fn test_is_mashiv_haruach_recited_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_mashiv_haruach_recited();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isMashivHaruachRecited",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_mashiv_haruach_recited,
+            "isMashivHaruachRecited",
+        );
     }
 
     #[test]
     fn test_is_morid_hatal_recited_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.is_morid_hatal_recited();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "isMoridHatalRecited",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            JewishCalendar::is_morid_hatal_recited,
+            "isMoridHatalRecited",
+        );
     }
 
     #[test]

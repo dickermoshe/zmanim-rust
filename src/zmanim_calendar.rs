@@ -286,7 +286,7 @@ impl<Tz: TimeZone> ZmanimCalendar<Tz> {
             candle_lighting_offset,
         }
     }
-    fn _get_sof_zman_tfila(
+    pub fn _get_sof_zman_tfila(
         &self,
         start_of_day: DateTime<Tz>,
         end_of_day: Option<DateTime<Tz>>,
@@ -299,7 +299,7 @@ impl<Tz: TimeZone> ZmanimCalendar<Tz> {
         }
     }
 
-    fn _get_samuch_le_mincha_ketana(
+    pub fn _get_samuch_le_mincha_ketana(
         &self,
         start_of_day: Option<DateTime<Tz>>,
         end_of_day: DateTime<Tz>,
@@ -311,7 +311,7 @@ impl<Tz: TimeZone> ZmanimCalendar<Tz> {
             self.get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 9.0)
         }
     }
-    fn _get_mincha_ketana(
+    pub fn _get_mincha_ketana(
         &self,
         start_of_day: Option<DateTime<Tz>>,
         end_of_day: DateTime<Tz>,
@@ -324,7 +324,7 @@ impl<Tz: TimeZone> ZmanimCalendar<Tz> {
         }
     }
 
-    fn _get_plag_hamincha(
+    pub fn _get_plag_hamincha(
         &self,
         start_of_day: Option<DateTime<Tz>>,
         end_of_day: DateTime<Tz>,

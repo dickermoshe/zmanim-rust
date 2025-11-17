@@ -154,7 +154,7 @@ impl TefilaRulesTrait for TefilaRules {
 
         let tomorrow_date = tomorrow_date.unwrap();
         let tomorrow = JewishCalendar::from_gregorian_date(
-            tomorrow_date.year() as i64,
+            tomorrow_date.year(),
             tomorrow_date.month() as u8,
             tomorrow_date.day() as u8,
             jewish_calendar.get_in_israel(),
@@ -449,8 +449,7 @@ mod tests {
         (tefila_rules, instance)
     }
 
-    #[test]
-    fn test_tachanun_recited_shacharis() {
+    fn bool_tester(fn_to_test: impl Fn(&TefilaRules, &JewishCalendar) -> bool, method: &str) {
         let jvm = init_jvm();
         let mut ran = false;
 
@@ -462,12 +461,12 @@ mod tests {
             ran = true;
             let (rust_calendar, java_calendar, message) = test_case.unwrap();
             let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_tachanun_recited_shacharis(&rust_calendar);
+            let result = fn_to_test(&tefila_rules, &rust_calendar);
 
             let java_result = jvm
                 .invoke(
                     &java_tefila_rules,
-                    "isTachanunRecitedShacharis",
+                    method,
                     &[InvocationArg::try_from(java_calendar).unwrap()],
                 )
                 .unwrap();
@@ -475,397 +474,116 @@ mod tests {
             assert_eq!(result, java_bool, "{}", message);
         }
         assert!(ran, "No test cases were run");
+    }
+
+    #[test]
+    fn test_tachanun_recited_shacharis() {
+        bool_tester(
+            TefilaRules::is_tachanun_recited_shacharis,
+            "isTachanunRecitedShacharis",
+        );
     }
 
     #[test]
     fn test_tachanun_recited_mincha() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_tachanun_recited_mincha(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isTachanunRecitedMincha",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_tachanun_recited_mincha,
+            "isTachanunRecitedMincha",
+        );
     }
 
     #[test]
     fn test_hallel_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_hallel_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isHallelRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(TefilaRules::is_hallel_recited, "isHallelRecited");
     }
 
     #[test]
     fn test_hallel_shalem_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_hallel_shalem_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isHallelShalemRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_hallel_shalem_recited,
+            "isHallelShalemRecited",
+        );
     }
 
     #[test]
     fn test_al_hanissim_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_al_hanissim_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isAlHanissimRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(TefilaRules::is_al_hanissim_recited, "isAlHanissimRecited");
     }
 
     #[test]
     fn test_yaaleh_veyavo_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_yaaleh_veyavo_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isYaalehVeyavoRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_yaaleh_veyavo_recited,
+            "isYaalehVeyavoRecited",
+        );
     }
 
     #[test]
     fn test_mizmor_lesoda_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_mizmor_lesoda_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isMizmorLesodaRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_mizmor_lesoda_recited,
+            "isMizmorLesodaRecited",
+        );
     }
 
     #[test]
     fn test_vesein_tal_umatar_start_date() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_vesein_tal_umatar_start_date(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isVeseinTalUmatarStartDate",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_vesein_tal_umatar_start_date,
+            "isVeseinTalUmatarStartDate",
+        );
     }
 
     #[test]
     fn test_vesein_tal_umatar_starting_tonight() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_vesein_tal_umatar_starting_tonight(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isVeseinTalUmatarStartingTonight",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_vesein_tal_umatar_starting_tonight,
+            "isVeseinTalUmatarStartingTonight",
+        );
     }
 
     #[test]
     fn test_vesein_tal_umatar_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_vesein_tal_umatar_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isVeseinTalUmatarRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_vesein_tal_umatar_recited,
+            "isVeseinTalUmatarRecited",
+        );
     }
 
     #[test]
     fn test_vesein_beracha_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_vesein_beracha_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isVeseinBerachaRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_vesein_beracha_recited,
+            "isVeseinBerachaRecited",
+        );
     }
 
     #[test]
     fn test_mashiv_haruach_start_date() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_mashiv_haruach_start_date(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isMashivHaruachStartDate",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_mashiv_haruach_start_date,
+            "isMashivHaruachStartDate",
+        );
     }
 
     #[test]
     fn test_mashiv_haruach_end_date() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_mashiv_haruach_end_date(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isMashivHaruachEndDate",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_mashiv_haruach_end_date,
+            "isMashivHaruachEndDate",
+        );
     }
 
     #[test]
     fn test_mashiv_haruach_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_mashiv_haruach_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isMashivHaruachRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(
+            TefilaRules::is_mashiv_haruach_recited,
+            "isMashivHaruachRecited",
+        );
     }
 
     #[test]
     fn test_morid_hatal_recited() {
-        let jvm = init_jvm();
-        let mut ran = false;
-
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let (tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm);
-            let result = tefila_rules.is_morid_hatal_recited(&rust_calendar);
-
-            let java_result = jvm
-                .invoke(
-                    &java_tefila_rules,
-                    "isMoridHatalRecited",
-                    &[InvocationArg::try_from(java_calendar).unwrap()],
-                )
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
+        bool_tester(TefilaRules::is_morid_hatal_recited, "isMoridHatalRecited");
     }
 }

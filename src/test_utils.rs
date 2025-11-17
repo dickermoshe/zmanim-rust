@@ -115,7 +115,7 @@ pub mod jni {
         let message = format!("DateTime: {}, Timezone: {}", dt, timezone_id);
         (dt, tz, milliseconds_since_epoch, message)
     }
-    fn random_jewish_year() -> i64 {
+    fn random_jewish_year() -> i32 {
         let epoch_year = 5730;
         rand::thread_rng().gen_range((epoch_year - 100)..=(epoch_year + 100)) // 100 years before and after the epoch
     }
@@ -305,7 +305,7 @@ pub mod jni {
                 .invoke_static("java.time.LocalDate", "of", &[year_arg, month_arg, day_arg])
                 .unwrap();
             let jewish_date = JewishDate::from_gregorian_date(
-                date_time.year() as i64,
+                date_time.year(),
                 date_time.month() as u8,
                 date_time.day() as u8,
             );
@@ -366,7 +366,7 @@ pub mod jni {
             };
             // Java will gracefully handle the case of a day of 30 for a month that only has 29 days,
             // and will set it to the last day of the month, whereas Rust will not.
-            if jewish_date.is_none() && java_jewish_date.is_some() && day == 30_i64 {
+            if jewish_date.is_none() && java_jewish_date.is_some() && day == 30 {
                 return None;
             }
             assert_eq!(
@@ -417,7 +417,7 @@ pub mod jni {
                 .invoke_static("java.time.LocalDate", "of", &[year_arg, month_arg, day_arg])
                 .unwrap();
             let jewish_calendar = JewishCalendar::from_gregorian_date(
-                date_time.year() as i64,
+                date_time.year(),
                 date_time.month() as u8,
                 date_time.day() as u8,
                 in_israel,
@@ -516,7 +516,7 @@ pub mod jni {
             };
             // Java will gracefully handle the case of a day of 30 for a month that only has 29 days,
             // and will set it to the last day of the month, whereas Rust will not.
-            if jewish_calendar.is_none() && java_jewish_calendar.is_some() && day == 30_i64 {
+            if jewish_calendar.is_none() && java_jewish_calendar.is_some() && day == 30 {
                 return None;
             }
             assert_eq!(
@@ -649,7 +649,7 @@ pub mod jni {
         }
     }
 
-    pub fn random_hebrew_date() -> (i64, i64, i64) {
+    pub fn random_hebrew_date() -> (i32, u8, u8) {
         use crate::constants::JewishMonth;
         let mut rng = rand::thread_rng();
         let year = random_jewish_year();
@@ -672,7 +672,7 @@ pub mod jni {
             _ => unreachable!(),
         };
         let day = rng.gen_range(1..=30);
-        (year, month as i64, day)
+        (year, month as u8, day as u8)
     }
     pub fn random_gregorian_date() -> (i64, i64, i64) {
         let (date_time, _, _, _) = random_date_time();
