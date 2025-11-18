@@ -7,5 +7,9 @@
         "**/Thumbs.db": true,
         "**/__pycache__": true
     },
-    "hide-files.files": []
+    "hide-files.files": [],
+    "rust-analyzer.cargo.features": [
+        "std"
+    ],
+    "rust-analyzer.cargo.noDefaultFeatures": true
 }

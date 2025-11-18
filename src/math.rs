@@ -1,5 +1,6 @@
 use chrono::Duration;
-
+#[cfg(feature = "no_std")]
+use core_maths::CoreFloat;
 pub fn multiply_duration(dur: Duration, factor: f64) -> Duration {
     let total_nanos: i64 = dur
         .num_nanoseconds()

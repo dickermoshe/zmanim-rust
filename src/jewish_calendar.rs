@@ -11,7 +11,8 @@ use crate::daf::*;
 use crate::jewish_date::JewishDate;
 use crate::noaa_calculator::NOAACalculator;
 use crate::parshas::*;
-
+#[cfg(feature = "no_std")]
+use core_maths::CoreFloat;
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct JewishCalendar {
     jewish_date: JewishDate,

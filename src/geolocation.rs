@@ -1,8 +1,8 @@
 use crate::constants::{_Formula, _MINUTE_MILLIS, GeoLocationTrait};
 use chrono::{DateTime, Duration, Offset, TimeZone};
 use core::f64::consts::PI;
-use libm::{atan, atan2, cos, log, sin, sqrt, tan};
-
+#[cfg(feature = "no_std")]
+use core_maths::CoreFloat;
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct GeoLocation {
     pub latitude: f64,
@@ -24,8 +24,8 @@ impl GeoLocationTrait for GeoLocation {
     }
     fn get_rhumb_line_bearing(&self, location: &impl GeoLocationTrait) -> f64 {
         let mut d_lon = (location.get_longitude() - self.get_longitude()).to_radians();
-        let d_phi = log(tan(location.get_latitude().to_radians() / 2.0 + PI / 4.0))
-            - log(tan(self.get_latitude().to_radians() / 2.0 + PI / 4.0));
+        let d_phi = ((location.get_latitude().to_radians() / 2.0 + PI / 4.0).tan()).ln()
+            - ((self.get_latitude().to_radians() / 2.0 + PI / 4.0).tan()).ln();
 
         if d_lon.abs() > PI {
             d_lon = if d_lon > 0.0 {
@@ -35,7 +35,7 @@ impl GeoLocationTrait for GeoLocation {
             };
         }
 
-        atan2(d_lon, d_phi).to_degrees()
+        d_lon.atan2(d_phi).to_degrees()
     }
 
     fn get_rhumb_line_distance(&self, location: &impl GeoLocationTrait) -> f64 {
@@ -43,19 +43,19 @@ impl GeoLocationTrait for GeoLocation {
         let d_lat = location.get_latitude().to_radians() - self.get_latitude().to_radians();
         let mut d_lon =
             (location.get_longitude().to_radians() - self.get_longitude().to_radians()).abs();
-        let d_phi = log(tan(location.get_latitude().to_radians() / 2.0 + PI / 4.0))
-            - log(tan(self.get_latitude().to_radians() / 2.0 + PI / 4.0));
+        let d_phi = ((location.get_latitude().to_radians() / 2.0 + PI / 4.0).tan()).ln()
+            - ((self.get_latitude().to_radians() / 2.0 + PI / 4.0).tan()).ln();
         let mut q = d_lat / d_phi;
 
         if !q.is_finite() {
-            q = cos(self.get_latitude().to_radians());
+            q = self.get_latitude().to_radians().cos();
         }
 
         if d_lon > PI {
             d_lon = 2.0 * PI - d_lon;
         }
 
-        let d = sqrt(d_lat * d_lat + q * q * d_lon * d_lon);
+        let d = (d_lat * d_lat + q * q * d_lon * d_lon).sqrt();
         d * earth_radius
     }
 
@@ -118,12 +118,12 @@ impl GeoLocation {
         let minor_semi_axis = 6356752.3142;
         let f = 1.0 / 298.257223563;
         let l = (location.get_longitude() - self.get_longitude()).to_radians();
-        let u1 = atan((1.0 - f) * tan(self.get_latitude().to_radians()));
-        let u2 = atan((1.0 - f) * tan(location.get_latitude().to_radians()));
-        let sin_u1 = sin(u1);
-        let cos_u1 = cos(u1);
-        let sin_u2 = sin(u2);
-        let cos_u2 = cos(u2);
+        let u1 = ((1.0 - f) * self.get_latitude().to_radians().tan()).atan();
+        let u2 = ((1.0 - f) * location.get_latitude().to_radians().tan()).atan();
+        let sin_u1 = u1.sin();
+        let cos_u1 = u1.cos();
+        let sin_u2 = u2.sin();
+        let cos_u2 = u2.cos();
 
         let mut lambda = l;
         let mut lambda_p = 2.0 * PI;
@@ -139,20 +139,19 @@ impl GeoLocation {
         let mut cos2_sigma_m = 0.0;
 
         while (lambda - lambda_p).abs() > 1e-12 && iter_limit > 0 {
-            sin_lambda = sin(lambda);
-            cos_lambda = cos(lambda);
-            sin_sigma = sqrt(
-                (cos_u2 * sin_lambda) * (cos_u2 * sin_lambda)
-                    + (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda)
-                        * (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda),
-            );
+            sin_lambda = lambda.sin();
+            cos_lambda = lambda.cos();
+            sin_sigma = ((cos_u2 * sin_lambda) * (cos_u2 * sin_lambda)
+                + (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda)
+                    * (cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda))
+                .sqrt();
 
             if sin_sigma == 0.0 {
                 return Some(0.0);
             }
 
             cos_sigma = sin_u1 * sin_u2 + cos_u1 * cos_u2 * cos_lambda;
-            sigma = atan2(sin_sigma, cos_sigma);
+            sigma = sin_sigma.atan2(cos_sigma);
             sin_alpha = cos_u1 * cos_u2 * sin_lambda / sin_sigma;
             cos_sq_alpha = 1.0 - sin_alpha * sin_alpha;
             cos2_sigma_m = cos_sigma - 2.0 * sin_u1 * sin_u2 / cos_sq_alpha;
@@ -195,17 +194,13 @@ impl GeoLocation {
                             * (-3.0 + 4.0 * cos2_sigma_m * cos2_sigma_m)));
         let distance = minor_semi_axis * a * (sigma - delta_sigma);
 
-        let fwd_az = atan2(
-            cos_u2 * sin_lambda,
-            cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda,
-        )
-        .to_degrees();
+        let fwd_az = (cos_u2 * sin_lambda)
+            .atan2(cos_u1 * sin_u2 - sin_u1 * cos_u2 * cos_lambda)
+            .to_degrees();
 
-        let rev_az = atan2(
-            cos_u1 * sin_lambda,
-            -sin_u1 * cos_u2 + cos_u1 * sin_u2 * cos_lambda,
-        )
-        .to_degrees();
+        let rev_az = (cos_u1 * sin_lambda)
+            .atan2(-sin_u1 * cos_u2 + cos_u1 * sin_u2 * cos_lambda)
+            .to_degrees();
 
         match formula {
             _Formula::Distance => Some(distance),

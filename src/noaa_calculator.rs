@@ -1,14 +1,17 @@
 use crate::constants::*;
 use chrono::{DateTime, Datelike, TimeZone, Timelike};
 use core::f64::consts::PI;
-use libm::{acos, asin, cos, floor, fmod, sin, tan};
-/// TODO ADD DOCS
+#[cfg(feature = "no_std")]
+use core_maths::CoreFloat;
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct NOAACalculator;
 
 impl NOAACalculator {
     fn _get_elevation_adjustment(&self, elevation_meters: f64) -> f64 {
-        acos(_EARTH_RADIUS / (_EARTH_RADIUS + (elevation_meters / 1000.0))).to_degrees()
+        (_EARTH_RADIUS / (_EARTH_RADIUS + (elevation_meters / 1000.0)))
+            .acos()
+            .to_degrees()
     }
 
     pub fn _get_julian_day<Tz: TimeZone>(&self, date_time: &DateTime<Tz>) -> f64 {
@@ -22,8 +25,8 @@ impl NOAACalculator {
         let a = year / 100;
         let b = 2 - a + a / 4;
 
-        floor(365.25 * (year + 4716) as f64)
-            + floor(30.6001 * (month + 1) as f64)
+        (365.25 * (year + 4716) as f64).floor()
+            + (30.6001 * (month + 1) as f64).floor()
             + day as f64
             + b as f64
             - 1524.5
@@ -45,7 +48,7 @@ impl NOAACalculator {
     fn _get_sun_geometric_mean_longitude(&self, julian_centuries: f64) -> f64 {
         let longitude = 280.46646 + julian_centuries * (36000.76983 + 0.0003032 * julian_centuries);
 
-        let mut r = fmod(longitude, 360.0);
+        let mut r = longitude % 360.0;
         if r < 0.0 {
             r += 360.0;
         }
@@ -63,9 +66,9 @@ impl NOAACalculator {
     fn _get_sun_equation_of_center(&self, julian_centuries: f64) -> f64 {
         let m = self._get_sun_geometric_mean_anomaly(julian_centuries);
         let m_rad = m.to_radians();
-        let sin_m = sin(m_rad);
-        let sin_2m = sin(m_rad * 2.0);
-        let sin_3m = sin(m_rad * 3.0);
+        let sin_m = m_rad.sin();
+        let sin_2m = (m_rad * 2.0).sin();
+        let sin_3m = (m_rad * 3.0).sin();
 
         sin_m * (1.914602 - julian_centuries * (0.004817 + 0.000014 * julian_centuries))
             + sin_2m * (0.019993 - 0.000101 * julian_centuries)
@@ -81,7 +84,7 @@ impl NOAACalculator {
     fn _get_sun_apparent_longitude(&self, julian_centuries: f64) -> f64 {
         let sun_true_longitude = self._get_sun_true_longitude(julian_centuries);
         let omega = 125.04 - 1934.136 * julian_centuries;
-        sun_true_longitude - 0.00569 - 0.00478 * sin(omega.to_radians())
+        sun_true_longitude - 0.00569 - 0.00478 * omega.to_radians().sin()
     }
 
     fn _get_mean_obliquity_of_ecliptic(&self, julian_centuries: f64) -> f64 {
@@ -94,14 +97,14 @@ impl NOAACalculator {
     fn _get_obliquity_correction(&self, julian_centuries: f64) -> f64 {
         let obliquity_of_ecliptic = self._get_mean_obliquity_of_ecliptic(julian_centuries);
         let omega = 125.04 - 1934.136 * julian_centuries;
-        obliquity_of_ecliptic + 0.00256 * cos(omega.to_radians())
+        obliquity_of_ecliptic + 0.00256 * omega.to_radians().cos()
     }
 
     fn _get_sun_declination(&self, julian_centuries: f64) -> f64 {
         let obliquity_correction = self._get_obliquity_correction(julian_centuries);
         let lambda = self._get_sun_apparent_longitude(julian_centuries);
-        let sin_t = sin(obliquity_correction.to_radians()) * sin(lambda.to_radians());
-        asin(sin_t).to_degrees()
+        let sin_t = obliquity_correction.to_radians().sin() * lambda.to_radians().sin();
+        sin_t.asin().to_degrees()
     }
 
     fn _get_equation_of_time(&self, julian_centuries: f64) -> f64 {
@@ -110,14 +113,14 @@ impl NOAACalculator {
         let eccentricity_earth_orbit = self._get_earth_orbit_eccentricity(julian_centuries);
         let geom_mean_anomaly_sun = self._get_sun_geometric_mean_anomaly(julian_centuries);
 
-        let mut y = tan(epsilon.to_radians() / 2.0);
+        let mut y = (epsilon.to_radians() / 2.0).tan();
         y *= y;
 
-        let sin_2l0 = sin(2.0 * geom_mean_long_sun.to_radians());
-        let sin_m = sin(geom_mean_anomaly_sun.to_radians());
-        let cos_2l0 = cos(2.0 * geom_mean_long_sun.to_radians());
-        let sin_4l0 = sin(4.0 * geom_mean_long_sun.to_radians());
-        let sin_2m = sin(2.0 * geom_mean_anomaly_sun.to_radians());
+        let sin_2l0 = (2.0 * geom_mean_long_sun.to_radians()).sin();
+        let sin_m = (geom_mean_anomaly_sun.to_radians()).sin();
+        let cos_2l0 = (2.0 * geom_mean_long_sun.to_radians()).cos();
+        let sin_4l0 = (4.0 * geom_mean_long_sun.to_radians()).sin();
+        let sin_2m = (2.0 * geom_mean_anomaly_sun.to_radians()).sin();
 
         let equation_of_time = y * sin_2l0 - 2.0 * eccentricity_earth_orbit * sin_m
             + 4.0 * eccentricity_earth_orbit * y * sin_m * cos_2l0
@@ -170,9 +173,9 @@ impl NOAACalculator {
         let lat_rad = latitude.to_radians();
         let sd_rad = solar_declination.to_radians();
 
-        let hour_angle = acos(
-            cos(zenith.to_radians()) / (cos(lat_rad) * cos(sd_rad)) - tan(lat_rad) * tan(sd_rad),
-        );
+        let hour_angle = (zenith.to_radians().cos() / (lat_rad.cos() * sd_rad.cos())
+            - lat_rad.tan() * sd_rad.tan())
+        .acos();
 
         if solar_event == _SolarEvent::Sunset {
             -hour_angle
@@ -235,24 +238,24 @@ impl NOAACalculator {
         let true_solar_time = ((adjustment + longitude / 360.0) + 2.0) % 1.0;
         let hour_angle_rad = true_solar_time * PI * 2.0 - PI;
 
-        let cos_zenith = sin(latitude.to_radians()) * sin(theta.to_radians())
-            + cos(latitude.to_radians()) * cos(theta.to_radians()) * cos(hour_angle_rad);
+        let cos_zenith = latitude.to_radians().sin() * theta.to_radians().sin()
+            + latitude.to_radians().cos() * theta.to_radians().cos() * hour_angle_rad.cos();
 
         let cos_zenith_clamped = cos_zenith.clamp(-1.0, 1.0);
-        let zenith = acos(cos_zenith_clamped).to_degrees();
+        let zenith = cos_zenith_clamped.acos().to_degrees();
 
-        let az_denom = cos(latitude.to_radians()) * sin(zenith.to_radians());
+        let az_denom = latitude.to_radians().cos() * zenith.to_radians().sin();
         let refraction_adjustment = 0.0;
         let elevation = 90.0 - (zenith - refraction_adjustment);
         if is_azimuth {
             let azimuth = if az_denom.abs() > 0.001 {
-                let az_rad = (sin(latitude.to_radians()) * cos(zenith.to_radians())
-                    - sin(theta.to_radians()))
+                let az_rad = (latitude.to_radians().sin() * zenith.to_radians().cos()
+                    - theta.to_radians().sin())
                     / az_denom;
 
                 let az_rad_clamped = az_rad.clamp(-1.0, 1.0);
                 180.0
-                    - acos(az_rad_clamped).to_degrees()
+                    - az_rad_clamped.acos().to_degrees()
                         * if hour_angle_rad > 0.0 { -1.0 } else { 1.0 }
             } else if latitude > 0.0 {
                 180.0

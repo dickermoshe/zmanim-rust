@@ -4,11 +4,14 @@ name = "yid-sdk"
 version = "0.1.0"
 
 [features]
-default = []
+default = ["std"]
 std = []
+no_std = ["core_maths"]
+
 
 [dependencies]
-libm = "0.2.15"
+core_maths = { version = "0.1.1", optional = true }
+
 
 [dependencies.chrono]
 version = "0.4.41"
@@ -45,3 +48,7 @@ rev = "478273"
 [lib]
 name = "jew_sdk"
 crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "z"
+lto = true

@@ -879,9 +879,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "core_maths",
  "icu_calendar",
  "j4rs",
- "libm",
  "num_enum",
  "proptest",
  "rand 0.8.5",
