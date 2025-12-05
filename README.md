@@ -1,3 +1,10 @@
+TODO: If you are reading this it means that we forgot to do something before we published this library
+TODO: Fix that you cannot create a month with 30 days in a chaser.
+TODO: Get changes merged into kosher jav
+TODO: Remove unwrap from this entire codebase
+TODO: Add no_std tests
+TODO: document that users shold create with datetimes that have 0:00 oclock
+
 # Jew-SDK
 
 A comprehensive Rust SDK that packages together all the programming utilities useful for developing applications in the Jewish world. This library provides essential tools for working with Jewish calendars, calculating religious times (zmanim), and performing various Jewish-related computations.

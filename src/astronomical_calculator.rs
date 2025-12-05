@@ -1,10 +1,37 @@
-use crate::constants::*;
+use crate::{constants::*, geolocation::GeoLocationTrait};
 use chrono::{DateTime, Datelike, TimeZone, Timelike};
 use core::f64::consts::PI;
 #[cfg(feature = "no_std")]
 use core_maths::CoreFloat;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub trait AstronomicalCalculatorTrait<G: GeoLocationTrait> {
+    fn get_utc_noon<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
+
+    fn get_utc_midnight<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
+
+    fn get_utc_sunrise<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &G,
+        zenith: f64,
+        adjust_for_elevation: bool,
+    ) -> Option<f64>;
+
+    fn get_utc_sunset<Tz: TimeZone>(
+        &self,
+        date_time: &DateTime<Tz>,
+        geo_location: &G,
+        zenith: f64,
+        adjust_for_elevation: bool,
+    ) -> Option<f64>;
+
+    fn get_solar_elevation<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
+
+    fn get_solar_azimuth<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
+}
+
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default, Eq)]
 pub struct NOAACalculator;
 
 impl NOAACalculator {
@@ -14,7 +41,7 @@ impl NOAACalculator {
             .to_degrees()
     }
 
-    pub fn _get_julian_day<Tz: TimeZone>(&self, date_time: &DateTime<Tz>) -> f64 {
+    fn _get_julian_day<Tz: TimeZone>(&self, date_time: &DateTime<Tz>) -> f64 {
         let mut year = date_time.year();
         let mut month: u8 = date_time.month() as u8;
         let day: i64 = date_time.day() as i64;
@@ -25,18 +52,14 @@ impl NOAACalculator {
         let a = year / 100;
         let b = 2 - a + a / 4;
 
-        (365.25 * (year + 4716) as f64).floor()
-            + (30.6001 * (month + 1) as f64).floor()
-            + day as f64
-            + b as f64
+        (365.25 * (year + 4716) as f64).floor() + (30.6001 * (month + 1) as f64).floor() + day as f64 + b as f64
             - 1524.5
     }
 
     fn _adjust_zenith(&self, zenith: f64, elevation: f64) -> f64 {
         let mut adjusted_zenith = zenith;
         if zenith == _GEOMETRIC_ZENITH {
-            adjusted_zenith =
-                zenith + (_SOLAR_RADIUS + _REFRACTION + self._get_elevation_adjustment(elevation));
+            adjusted_zenith = zenith + (_SOLAR_RADIUS + _REFRACTION + self._get_elevation_adjustment(elevation));
         }
         adjusted_zenith
     }
@@ -88,9 +111,8 @@ impl NOAACalculator {
     }
 
     fn _get_mean_obliquity_of_ecliptic(&self, julian_centuries: f64) -> f64 {
-        let seconds = 21.448
-            - julian_centuries
-                * (46.8150 + julian_centuries * (0.00059 - julian_centuries * (0.001813)));
+        let seconds =
+            21.448 - julian_centuries * (46.8150 + julian_centuries * (0.00059 - julian_centuries * (0.001813)));
         23.0 + (26.0 + (seconds / 60.0)) / 60.0
     }
 
@@ -139,15 +161,13 @@ impl NOAACalculator {
         solar_event: _SolarEvent,
     ) -> f64 {
         let julian_day = self._get_julian_day(date_time);
-        // println!("Rjulian_day: {:?}", julian_day);
 
         let noonmin = self._get_solar_noon_midnight_utc(julian_day, longitude, _SolarEvent::Noon);
         let tnoon = self._get_julian_centuries_from_julian_day(julian_day + noonmin / 1440.0);
 
         let mut equation_of_time = self._get_equation_of_time(tnoon);
         let mut solar_declination = self._get_sun_declination(tnoon);
-        let mut hour_angle =
-            self._get_sun_hour_angle(latitude, solar_declination, zenith, solar_event);
+        let mut hour_angle = self._get_sun_hour_angle(latitude, solar_declination, zenith, solar_event);
         let mut delta = longitude - hour_angle.to_degrees();
         let mut time_diff = 4.0 * delta;
         let mut time_utc = 720.0 + time_diff - equation_of_time;
@@ -163,19 +183,12 @@ impl NOAACalculator {
         time_utc
     }
 
-    fn _get_sun_hour_angle(
-        &self,
-        latitude: f64,
-        solar_declination: f64,
-        zenith: f64,
-        solar_event: _SolarEvent,
-    ) -> f64 {
+    fn _get_sun_hour_angle(&self, latitude: f64, solar_declination: f64, zenith: f64, solar_event: _SolarEvent) -> f64 {
         let lat_rad = latitude.to_radians();
         let sd_rad = solar_declination.to_radians();
 
-        let hour_angle = (zenith.to_radians().cos() / (lat_rad.cos() * sd_rad.cos())
-            - lat_rad.tan() * sd_rad.tan())
-        .acos();
+        let hour_angle =
+            (zenith.to_radians().cos() / (lat_rad.cos() * sd_rad.cos()) - lat_rad.tan() * sd_rad.tan()).acos();
 
         if solar_event == _SolarEvent::Sunset {
             -hour_angle
@@ -184,12 +197,7 @@ impl NOAACalculator {
         }
     }
 
-    fn _get_solar_noon_midnight_utc(
-        &self,
-        julian_day: f64,
-        longitude: f64,
-        solar_event: _SolarEvent,
-    ) -> f64 {
+    fn _get_solar_noon_midnight_utc(&self, julian_day: f64, longitude: f64, solar_event: _SolarEvent) -> f64 {
         let julian_day = if solar_event == _SolarEvent::Noon {
             julian_day
         } else {
@@ -249,14 +257,11 @@ impl NOAACalculator {
         let elevation = 90.0 - (zenith - refraction_adjustment);
         if is_azimuth {
             let azimuth = if az_denom.abs() > 0.001 {
-                let az_rad = (latitude.to_radians().sin() * zenith.to_radians().cos()
-                    - theta.to_radians().sin())
-                    / az_denom;
+                let az_rad =
+                    (latitude.to_radians().sin() * zenith.to_radians().cos() - theta.to_radians().sin()) / az_denom;
 
                 let az_rad_clamped = az_rad.clamp(-1.0, 1.0);
-                180.0
-                    - az_rad_clamped.acos().to_degrees()
-                        * if hour_angle_rad > 0.0 { -1.0 } else { 1.0 }
+                180.0 - az_rad_clamped.acos().to_degrees() * if hour_angle_rad > 0.0 { -1.0 } else { 1.0 }
             } else if latitude > 0.0 {
                 180.0
             } else {
@@ -269,18 +274,10 @@ impl NOAACalculator {
     }
 }
 
-impl NOAACalculatorTrait for NOAACalculator {
-    fn get_utc_noon<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &impl GeoLocationTrait,
-    ) -> f64 {
+impl<G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for NOAACalculator {
+    fn get_utc_noon<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64 {
         let julian_day = self._get_julian_day(date_time);
-        let noon = self._get_solar_noon_midnight_utc(
-            julian_day,
-            -geo_location.get_longitude(),
-            _SolarEvent::Noon,
-        );
+        let noon = self._get_solar_noon_midnight_utc(julian_day, -geo_location.get_longitude(), _SolarEvent::Noon);
         let noon_hours = noon / 60.0;
         if noon_hours > 0.0 {
             noon_hours % 24.0
@@ -289,17 +286,10 @@ impl NOAACalculatorTrait for NOAACalculator {
         }
     }
 
-    fn get_utc_midnight<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &impl GeoLocationTrait,
-    ) -> f64 {
+    fn get_utc_midnight<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64 {
         let julian_day = self._get_julian_day(date_time);
-        let midnight = self._get_solar_noon_midnight_utc(
-            julian_day,
-            -geo_location.get_longitude(),
-            _SolarEvent::Midnight,
-        );
+        let midnight =
+            self._get_solar_noon_midnight_utc(julian_day, -geo_location.get_longitude(), _SolarEvent::Midnight);
         let midnight_hours = midnight / 60.0;
         if midnight_hours > 0.0 {
             midnight_hours % 24.0
@@ -311,7 +301,7 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_utc_sunrise<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &impl GeoLocationTrait,
+        geo_location: &G,
         zenith: f64,
         adjust_for_elevation: bool,
     ) -> Option<f64> {
@@ -340,7 +330,7 @@ impl NOAACalculatorTrait for NOAACalculator {
     fn get_utc_sunset<Tz: TimeZone>(
         &self,
         date_time: &DateTime<Tz>,
-        geo_location: &impl GeoLocationTrait,
+        geo_location: &G,
         zenith: f64,
         adjust_for_elevation: bool,
     ) -> Option<f64> {
@@ -366,154 +356,11 @@ impl NOAACalculatorTrait for NOAACalculator {
         if result.is_nan() { None } else { Some(result) }
     }
 
-    fn get_solar_elevation<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &impl GeoLocationTrait,
-    ) -> f64 {
+    fn get_solar_elevation<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64 {
         self._get_solar_elevation_azimuth(date_time, geo_location, false)
     }
 
-    fn get_solar_azimuth<Tz: TimeZone>(
-        &self,
-        date_time: &DateTime<Tz>,
-        geo_location: &impl GeoLocationTrait,
-    ) -> f64 {
+    fn get_solar_azimuth<Tz: TimeZone>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64 {
         self._get_solar_elevation_azimuth(date_time, geo_location, true)
-    }
-}
-#[cfg(test)]
-mod jni_tests {
-
-    use crate::{
-        geolocation::GeoLocation,
-        test_utils::jni::{
-            DEFAULT_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64,
-            assert_almost_equal_f64_option, create_date_times_with_geolocation,
-            create_java_noaa_calculator, init_jvm,
-        },
-    };
-
-    use super::*;
-
-    use chrono_tz::Tz;
-    use j4rs::InvocationArg;
-    use rand::Rng;
-
-    fn f64_tester(
-        fn_to_test: impl Fn(&NOAACalculator, &DateTime<Tz>, &GeoLocation) -> f64,
-        method: &str,
-    ) {
-        let calculator = NOAACalculator;
-        let jvm = init_jvm();
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_date_times_with_geolocation(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            let (date_time, java_calendar, geo_location, java_geo_location, message) =
-                test_case.unwrap();
-            let noaa_calculator = create_java_noaa_calculator(&jvm);
-
-            let result = fn_to_test(&calculator, &date_time, &geo_location);
-            let raw_java_result = jvm
-                .invoke(
-                    &noaa_calculator,
-                    method,
-                    &[
-                        InvocationArg::from(java_calendar),
-                        InvocationArg::from(java_geo_location),
-                    ],
-                )
-                .unwrap();
-            let java_result = jvm.to_rust::<f64>(raw_java_result).unwrap();
-            assert_almost_equal_f64(result, java_result, DEFAULT_TEST_EPSILON, &message);
-        }
-    }
-
-    fn f64_option_tester_with_zenith_and_adjust_for_elevation(
-        fn_to_test: impl Fn(&NOAACalculator, &DateTime<Tz>, &GeoLocation, f64, bool) -> Option<f64>,
-        method: &str,
-    ) {
-        let calculator = NOAACalculator;
-        let jvm = init_jvm();
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_date_times_with_geolocation(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            let (date_time, java_calendar, geo_location, java_geo_location, message) =
-                test_case.unwrap();
-            let noaa_calculator = create_java_noaa_calculator(&jvm);
-            let zenith = rand::thread_rng().gen_range(-180.0..=180.0);
-            let adjust_for_elevation = rand::thread_rng().gen_bool(0.5);
-            let result = fn_to_test(
-                &calculator,
-                &date_time,
-                &geo_location,
-                zenith,
-                adjust_for_elevation,
-            );
-            let raw_java_result = jvm
-                .invoke(
-                    &noaa_calculator,
-                    method,
-                    &[
-                        InvocationArg::from(java_calendar),
-                        InvocationArg::from(java_geo_location),
-                        InvocationArg::try_from(zenith)
-                            .unwrap()
-                            .into_primitive()
-                            .unwrap(),
-                        InvocationArg::try_from(adjust_for_elevation)
-                            .unwrap()
-                            .into_primitive()
-                            .unwrap(),
-                    ],
-                )
-                .unwrap();
-            let java_result = jvm.to_rust::<f64>(raw_java_result).unwrap();
-            // Convert java's Nan to None
-            let java_result = if java_result.is_nan() {
-                None
-            } else {
-                Some(java_result)
-            };
-            assert_almost_equal_f64_option(&result, &java_result, DEFAULT_TEST_EPSILON, &message);
-        }
-    }
-
-    /// Test Julian day calculation against Java implementation
-    #[test]
-    fn test_get_utc_noon_against_java() {
-        f64_tester(NOAACalculator::get_utc_noon, "getUTCNoon");
-    }
-
-    #[test]
-    fn test_get_utc_midnight_against_java() {
-        f64_tester(NOAACalculator::get_utc_midnight, "getUTCMidnight");
-    }
-    #[test]
-    fn test_get_utc_sunrise_against_java() {
-        f64_option_tester_with_zenith_and_adjust_for_elevation(
-            NOAACalculator::get_utc_sunrise,
-            "getUTCSunrise",
-        );
-    }
-    #[test]
-    fn test_get_utc_sunset_against_java() {
-        f64_option_tester_with_zenith_and_adjust_for_elevation(
-            NOAACalculator::get_utc_sunset,
-            "getUTCSunset",
-        );
-    }
-    #[test]
-    fn test_get_solar_elevation_against_java() {
-        f64_tester(NOAACalculator::get_solar_elevation, "getSolarElevation");
-    }
-
-    #[test]
-    fn test_get_solar_azimuth_against_java() {
-        f64_tester(NOAACalculator::get_solar_azimuth, "getSolarAzimuth");
     }
 }

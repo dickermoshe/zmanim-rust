@@ -1,18 +1,22 @@
-use chrono::{DateTime, Duration, TimeZone};
+use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
+use icu_calendar::{
+    options::{DateAddOptions, Overflow},
+    types::DateDuration,
+};
 
-use crate::{astronomical_calendar::AstronomicalCalendar, constants::*, math::multiply_duration};
+use crate::{
+    astronomical_calendar::AstronomicalCalendar, constants::*, jewish_calendar::JewishCalendar,
+    math::multiply_duration,
+};
 
-/// TODO ADD DOCS
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct ZmanimCalendar<Tz: TimeZone> {
-    /// TODO ADD DOCS
     pub astronomical_calendar: AstronomicalCalendar<Tz>,
-    /// TODO ADD DOCS
     pub use_astronomical_chatzos: bool,
-    /// TODO ADD DOCS
     pub use_astronomical_chatzos_for_other_zmanim: bool,
-    /// TODO ADD DOCS
     pub candle_lighting_offset: Duration,
+    pub ateret_torah_sunset_offset: Duration,
 }
 
 impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
@@ -28,36 +32,92 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
     fn get_candle_lighting_offset(&self) -> Duration {
         self.candle_lighting_offset
     }
-
-    fn get_tzais(&self) -> Option<DateTime<Tz>> {
-        self.get_astronomical_calendar()
-            .get_sunset_offset_by_degrees(_ZENITH_8_POINT_5)
+    fn get_ateret_torah_sunset_offset(&self) -> Duration {
+        self.ateret_torah_sunset_offset
     }
-
-    fn get_alos_hashachar(&self) -> Option<DateTime<Tz>> {
-        self.get_astronomical_calendar()
-            .get_sunrise_offset_by_degrees(_ZENITH_16_POINT_1)
-    }
-    fn get_alos_72(&self) -> Option<DateTime<Tz>> {
-        self.get_astronomical_calendar()
-            .get_sunrise()
-            .map(|sunrise| sunrise - Duration::minutes(72))
-    }
-    fn get_chatzos(&self) -> Option<DateTime<Tz>> {
-        if self.get_use_astronomical_chatzos() {
-            self.get_astronomical_calendar().get_sun_transit()
-        } else {
-            self.get_chatzos_as_half_day()
-                .or(self.get_astronomical_calendar().get_sun_transit())
+    fn _get_tchilas_zman_kidush_levana_7_days(
+        &self,
+        alos: &Option<DateTime<Tz>>,
+        tzais: &Option<DateTime<Tz>>,
+    ) -> Option<DateTime<Tz>> {
+        let jewish_calendar = self._get_jewish_calendar();
+        if jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 4
+            || jewish_calendar.get_jewish_date().get_jewish_day_of_month() > 9
+        {
+            return None;
         }
+        let molad_based_time = jewish_calendar.get_tchilaszman_kidush_levana_7_days()?;
+
+        self._get_molad_based_time(molad_based_time, alos, tzais, false)
     }
-    fn get_chatzos_as_half_day(&self) -> Option<DateTime<Tz>> {
-        let sunrise = self.get_astronomical_calendar().get_sea_level_sunrise()?;
-        let sunset = self.get_astronomical_calendar().get_sea_level_sunset()?;
-        let chatzos = self
-            .get_astronomical_calendar()
-            .get_sun_transit_from_times(sunrise, sunset)?;
-        Some(chatzos)
+
+    fn _get_sof_zman_kidush_levana_15_days(
+        &self,
+        alos: &Option<DateTime<Tz>>,
+        tzais: &Option<DateTime<Tz>>,
+    ) -> Option<DateTime<Tz>> {
+        let jewish_calendar = self._get_jewish_calendar();
+        if jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 11
+            || jewish_calendar.get_jewish_date().get_jewish_day_of_month() > 17
+        {
+            return None;
+        }
+        let molad_based_time = jewish_calendar.get_sof_zman_kidush_levana_15_days()?;
+        self._get_molad_based_time(molad_based_time, alos, tzais, false)
+    }
+
+    fn _get_tchilas_zman_kidush_levana_3_days(
+        &self,
+        alos: &Option<DateTime<Tz>>,
+        tzais: &Option<DateTime<Tz>>,
+    ) -> Option<DateTime<Tz>> {
+        let mut jewish_calendar = self._get_jewish_calendar();
+        if jewish_calendar.get_jewish_date().get_jewish_day_of_month() > 5
+            && jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 30
+        {
+            return None;
+        }
+
+        let zman = self._get_molad_based_time(
+            jewish_calendar.get_tchilaszman_kidush_levana_3_days()?,
+            alos,
+            tzais,
+            true,
+        );
+        if zman.is_none() && jewish_calendar.get_jewish_date().get_jewish_day_of_month() == 30 {
+            let mut add_option = DateAddOptions::default();
+            add_option.overflow = Some(Overflow::Constrain);
+
+            let _ = jewish_calendar
+                .jewish_date
+                .hebrew_date
+                .try_add_with_options(DateDuration::for_months(1), add_option)
+                .ok()?;
+
+            return self._get_molad_based_time(
+                jewish_calendar.get_tchilaszman_kidush_levana_3_days()?,
+                alos,
+                tzais,
+                true,
+            );
+        }
+        zman
+    }
+
+    fn _get_sof_zman_kidush_levana_between_moldos(
+        &self,
+        alos: &Option<DateTime<Tz>>,
+        tzais: &Option<DateTime<Tz>>,
+    ) -> Option<DateTime<Tz>> {
+        let jewish_calendar = self._get_jewish_calendar();
+        if jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 11
+            || jewish_calendar.get_jewish_date().get_jewish_day_of_month() > 16
+        {
+            return None;
+        }
+        let molad_based_time = jewish_calendar.get_sof_zman_kidush_levana_between_moldos()?;
+
+        self._get_molad_based_time(molad_based_time, alos, tzais, false)
     }
 
     fn get_percent_of_shaah_zmanis_from_degrees(&self, degrees: f64, sunset: bool) -> Option<f64> {
@@ -88,14 +148,14 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
         }
     }
 
-    fn get_half_day_based_zman(
+    fn _get_half_day_based_zman(
         &self,
         start_of_half_day: DateTime<Tz>,
         end_of_half_day: DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>> {
         let shaah_zmanis =
-            self.get_half_day_based_shaah_zmanis(&start_of_half_day, &end_of_half_day)?;
+            self._get_half_day_based_shaah_zmanis(&start_of_half_day, &end_of_half_day)?;
         if hours >= 0.0 {
             Some(start_of_half_day + multiply_duration(shaah_zmanis, hours))
         } else {
@@ -103,7 +163,7 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
         }
     }
 
-    fn get_half_day_based_shaah_zmanis(
+    fn _get_half_day_based_shaah_zmanis(
         &self,
         start_of_half_day: &DateTime<Tz>,
         end_of_half_day: &DateTime<Tz>,
@@ -111,7 +171,7 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
         Some((end_of_half_day.clone() - start_of_half_day) / 6)
     }
 
-    fn get_shaah_zmanis_based_zman(
+    fn _get_shaah_zmanis_based_zman(
         &self,
         start_of_day: DateTime<Tz>,
         end_of_day: DateTime<Tz>,
@@ -131,62 +191,10 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
-            self.get_half_day_based_zman(start_of_day, self.get_chatzos()?, 3.0)
+            self._get_half_day_based_zman(start_of_day, self.get_zman(&Zman::Chatzos)?, 3.0)
         } else {
-            self.get_shaah_zmanis_based_zman(start_of_day, end_of_day?, 3.0)
+            self._get_shaah_zmanis_based_zman(start_of_day, end_of_day?, 3.0)
         }
-    }
-
-    fn get_sof_zman_shma(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
-        self._get_sof_zman_shma(start_of_day, Some(end_of_day), false)
-    }
-
-    fn get_sof_zman_shma_gra(&self) -> Option<DateTime<Tz>> {
-        self._get_sof_zman_shma(
-            self.get_astronomical_calendar().get_sunrise()?,
-            self.get_astronomical_calendar().get_sunset(),
-            true,
-        )
-    }
-
-    fn get_sof_zman_shma_mga(&self) -> Option<DateTime<Tz>> {
-        self._get_sof_zman_shma(self.get_alos_72()?, self.get_tzais_72(), true)
-    }
-
-    fn get_tzais_72(&self) -> Option<DateTime<Tz>> {
-        self.get_astronomical_calendar()
-            .get_sunset()
-            .map(|sunset| sunset + Duration::minutes(72))
-    }
-    // Broken
-    fn get_candle_lighting(&self) -> Option<DateTime<Tz>> {
-        self.get_astronomical_calendar()
-            .get_sea_level_sunset()
-            .map(|sunset| sunset - self.get_candle_lighting_offset())
-    }
-
-    fn get_sof_zman_tfila(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
-        self._get_sof_zman_tfila(start_of_day, Some(end_of_day), false)
-    }
-
-    fn get_sof_zman_tfila_gra(&self) -> Option<DateTime<Tz>> {
-        self._get_sof_zman_tfila(
-            self.get_astronomical_calendar().get_sunrise()?,
-            self.get_astronomical_calendar().get_sunset(),
-            true,
-        )
-    }
-
-    fn get_sof_zman_tfila_mga(&self) -> Option<DateTime<Tz>> {
-        self._get_sof_zman_tfila(self.get_alos_72()?, self.get_tzais_72(), true)
     }
 
     fn _get_mincha_gedola(
@@ -196,66 +204,10 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
-            self.get_half_day_based_zman(self.get_chatzos()?, end_of_day, 0.5)
+            self._get_half_day_based_zman(self.get_zman(&Zman::Chatzos)?, end_of_day, 0.5)
         } else {
-            self.get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 6.5)
+            self._get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 6.5)
         }
-    }
-
-    fn get_mincha_gedola(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
-        self._get_mincha_gedola(Some(start_of_day), end_of_day, false)
-    }
-
-    fn get_mincha_gedola_default(&self) -> Option<DateTime<Tz>> {
-        self._get_mincha_gedola(
-            self.get_astronomical_calendar().get_sunrise(),
-            self.get_astronomical_calendar().get_sunset()?,
-            true,
-        )
-    }
-
-    fn get_samuch_le_mincha_ketana(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
-        self._get_samuch_le_mincha_ketana(Some(start_of_day), end_of_day, false)
-    }
-
-    fn get_mincha_ketana(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
-        self._get_mincha_ketana(Some(start_of_day), end_of_day, false)
-    }
-
-    fn get_mincha_ketana_default(&self) -> Option<DateTime<Tz>> {
-        self._get_mincha_ketana(
-            self.get_astronomical_calendar().get_sunrise(),
-            self.get_astronomical_calendar().get_sunset()?,
-            true,
-        )
-    }
-
-    fn get_plag_hamincha(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
-        self._get_plag_hamincha(Some(start_of_day), end_of_day, false)
-    }
-
-    fn get_plag_hamincha_default(&self) -> Option<DateTime<Tz>> {
-        self._get_plag_hamincha(
-            self.get_astronomical_calendar().get_sunrise(),
-            self.get_astronomical_calendar().get_sunset()?,
-            true,
-        )
     }
 
     fn get_shaah_zmanis_gra(&self) -> Option<Duration> {
@@ -268,7 +220,60 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
 
     fn get_shaah_zmanis_mga(&self) -> Option<Duration> {
         self.get_astronomical_calendar()
-            .get_temporal_hour_from_times(&self.get_alos_72()?, &self.get_tzais_72()?)
+            .get_temporal_hour_from_times(
+                &self.get_zman(&Zman::Alos72)?,
+                &self.get_zman(&Zman::Tzais72)?,
+            )
+    }
+    fn _get_mincha_ketana(
+        &self,
+        start_of_day: Option<DateTime<Tz>>,
+        end_of_day: DateTime<Tz>,
+        synchronous: bool,
+    ) -> Option<DateTime<Tz>> {
+        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
+            self._get_half_day_based_zman(self.get_zman(&Zman::Chatzos)?, end_of_day, 3.5)
+        } else {
+            self._get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 9.5)
+        }
+    }
+    fn _get_sof_zman_tfila(
+        &self,
+        start_of_day: DateTime<Tz>,
+        end_of_day: Option<DateTime<Tz>>,
+        synchronous: bool,
+    ) -> Option<DateTime<Tz>> {
+        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
+            self._get_half_day_based_zman(start_of_day, self.get_zman(&Zman::Chatzos)?, 4.0)
+        } else {
+            self._get_shaah_zmanis_based_zman(start_of_day, end_of_day?, 4.0)
+        }
+    }
+
+    fn _get_samuch_le_mincha_ketana(
+        &self,
+        start_of_day: Option<DateTime<Tz>>,
+        end_of_day: DateTime<Tz>,
+        synchronous: bool,
+    ) -> Option<DateTime<Tz>> {
+        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
+            self._get_half_day_based_zman(self.get_zman(&Zman::Chatzos)?, end_of_day, 3.0)
+        } else {
+            self._get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 9.0)
+        }
+    }
+
+    fn _get_plag_hamincha(
+        &self,
+        start_of_day: Option<DateTime<Tz>>,
+        end_of_day: DateTime<Tz>,
+        synchronous: bool,
+    ) -> Option<DateTime<Tz>> {
+        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
+            self._get_half_day_based_zman(self.get_zman(&Zman::Chatzos)?, end_of_day, 4.75)
+        } else {
+            self._get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 10.75)
+        }
     }
 }
 
@@ -278,63 +283,95 @@ impl<Tz: TimeZone> ZmanimCalendar<Tz> {
         candle_lighting_offset: Duration,
         use_astronomical_chatzos: bool,
         use_astronomical_chatzos_for_other_zmanim: bool,
+        ateret_torah_sunset_offset: Duration,
     ) -> Self {
         Self {
             astronomical_calendar,
             use_astronomical_chatzos,
             use_astronomical_chatzos_for_other_zmanim,
             candle_lighting_offset,
-        }
-    }
-    pub fn _get_sof_zman_tfila(
-        &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
-        synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
-        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
-            self.get_half_day_based_zman(start_of_day, self.get_chatzos()?, 4.0)
-        } else {
-            self.get_shaah_zmanis_based_zman(start_of_day, end_of_day?, 4.0)
+            ateret_torah_sunset_offset,
         }
     }
 
-    pub fn _get_samuch_le_mincha_ketana(
-        &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
-        synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
-        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
-            self.get_half_day_based_zman(self.get_chatzos()?, end_of_day, 3.0)
-        } else {
-            self.get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 9.0)
-        }
-    }
-    pub fn _get_mincha_ketana(
-        &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
-        synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
-        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
-            self.get_half_day_based_zman(self.get_chatzos()?, end_of_day, 3.5)
-        } else {
-            self.get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 9.5)
-        }
+    fn _get_midnight_last_night(&self) -> DateTime<Tz> {
+        let midnight = self
+            .get_astronomical_calendar()
+            .get_date_time()
+            .with_hour(0)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        midnight
     }
 
-    pub fn _get_plag_hamincha(
+    fn _get_midnight_tonight(&self) -> DateTime<Tz> {
+        let midnight = self
+            .get_astronomical_calendar()
+            .get_date_time()
+            .clone()
+            .checked_add_signed(chrono::Duration::days(1))
+            .unwrap()
+            .with_hour(0)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        midnight
+    }
+
+    fn _get_molad_based_time(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
-        synchronous: bool,
+        utc_molad_based_time: DateTime<Utc>,
+        alos: &Option<DateTime<Tz>>,
+        tzais: &Option<DateTime<Tz>>,
+        techila: bool,
     ) -> Option<DateTime<Tz>> {
-        if self.get_use_astronomical_chatzos_for_other_zmanim() && synchronous {
-            self.get_half_day_based_zman(self.get_chatzos()?, end_of_day, 4.75)
+        let molad_based_time = self._localized_datetime(utc_molad_based_time);
+        let last_midnight = self._get_midnight_last_night();
+        let midnight_tonight = self._get_midnight_tonight();
+
+        if molad_based_time < last_midnight || molad_based_time > midnight_tonight {
+            None
         } else {
-            self.get_shaah_zmanis_based_zman(start_of_day?, end_of_day, 10.75)
+            match (alos, tzais) {
+                (None, _) | (_, None) => Some(molad_based_time),
+                (Some(alos), Some(tzais)) => {
+                    if molad_based_time > *alos && molad_based_time < *tzais {
+                        match techila {
+                            true => Some(tzais.clone()),
+                            false => Some(alos.clone()),
+                        }
+                    } else {
+                        Some(molad_based_time)
+                    }
+                }
+            }
         }
+    }
+    fn _get_jewish_calendar(&self) -> JewishCalendar {
+        JewishCalendar::from_gregorian_date(
+            self.get_astronomical_calendar().get_date_time().year(),
+            self.get_astronomical_calendar().get_date_time().month() as u8,
+            self.get_astronomical_calendar().get_date_time().day() as u8,
+            false,
+            false,
+            false,
+        )
+        .unwrap()
+    }
+    fn _localized_datetime(&self, datetime: DateTime<Utc>) -> DateTime<Tz> {
+        self.get_astronomical_calendar()
+            .get_date_time()
+            .timezone()
+            .from_utc_datetime(&datetime.naive_utc())
     }
 }
 
@@ -350,7 +387,7 @@ mod jni_tests {
 
     use super::*;
 
-    use j4rs::{Instance, InvocationArg, Jvm};
+    use j4rs::{Instance, InvocationArg, Jvm, Null};
     use rand::Rng;
 
     fn get_java_date_millis(jvm: &Jvm, date_instance: &Instance) -> Option<i64> {
@@ -362,134 +399,57 @@ mod jni_tests {
         Some(millis)
     }
 
-    #[test]
-    fn test_get_tzais_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
+    impl Zman {
+        fn java_method_name(&self) -> &str {
+            match self {
+                Zman::AlosHashachar => "getAlosHashachar",
+                Zman::Alos72 => "getAlos72",
+                Zman::Chatzos => "getChatzos",
+                Zman::ChatzosAsHalfDay => "getChatzosAsHalfDay",
+                Zman::MinchaGedola => "getMinchaGedola",
+                Zman::MinchaKetana => "getMinchaKetana",
+                Zman::PlagHamincha => "getPlagHamincha",
+                Zman::SofZmanShmaGRA => "getSofZmanShmaGRA",
+                Zman::SofZmanShmaMGA => "getSofZmanShmaMGA",
+                Zman::SofZmanTfilaGRA => "getSofZmanTfilaGRA",
+                Zman::SofZmanTfilaMGA => "getSofZmanTfilaMGA",
+                Zman::Tzais => "getTzais",
+                Zman::Tzais72 => "getTzais72",
+                Zman::CandleLighting => "getCandleLighting",
             }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar.get_tzais().map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(&java_zmanim_calendar, "getTzais", InvocationArg::empty())
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
-        assert!(ran, "No test cases were run");
     }
 
     #[test]
-    fn test_get_alos_hashachar_against_java() {
+    fn test_java_method_name() {
         let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
+
+        for zman in Zman::values() {
+            let mut ran = false;
+            for _ in 0..DEFAULT_TEST_ITERATIONS {
+                let test_case = create_zmanim_calendars(&jvm);
+                if test_case.is_none() {
+                    continue;
+                }
+                ran = true;
+                let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
+                let message = format!("{} against java {}", zman.java_method_name(), message);
+
+                let result = calendar.get_zman(&zman).map(|d| d.timestamp_millis());
+
+                let java_result = jvm
+                    .invoke(
+                        &java_zmanim_calendar,
+                        zman.java_method_name(),
+                        InvocationArg::empty(),
+                    )
+                    .unwrap();
+                let java_result = get_java_date_millis(&jvm, &java_result);
+
+                assert_almost_equal_i64_option(&result, &java_result, 50, &message);
             }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar.get_alos_hashachar().map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getAlosHashachar",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
+            assert!(ran, "No test cases were run");
         }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_alos_72_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar.get_alos_72().map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(&java_zmanim_calendar, "getAlos72", InvocationArg::empty())
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_chatzos_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar.get_chatzos().map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(&java_zmanim_calendar, "getChatzos", InvocationArg::empty())
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_chatzos_as_half_day_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_chatzos_as_half_day()
-                .map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getChatzosAsHalfDay",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
     }
 
     #[test]
@@ -513,9 +473,15 @@ mod jni_tests {
 
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
+            let synchronous = rand::thread_rng().gen_bool(0.5);
+            let end_of_day = if rand::thread_rng().gen_bool(0.5) {
+                None
+            } else {
+                Some(end_of_day)
+            };
 
             let result = calendar
-                .get_sof_zman_shma(start_of_day.clone(), end_of_day.clone())
+                ._get_sof_zman_shma(start_of_day.clone(), end_of_day, synchronous)
                 .map(|d| d.timestamp_millis());
 
             let java_start = jvm
@@ -527,136 +493,30 @@ mod jni_tests {
                         .unwrap()],
                 )
                 .unwrap();
-            let java_end = jvm
-                .create_instance(
-                    "java.util.Date",
-                    &[InvocationArg::try_from(end_of_day.timestamp_millis())
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap()],
+            let java_end = if let Some(end_of_day) = end_of_day {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(end_of_day.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
                 )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+            let java_synchronous = InvocationArg::try_from(synchronous)
+                .unwrap()
+                .into_primitive()
                 .unwrap();
 
             let java_result = jvm
                 .invoke(
                     &java_zmanim_calendar,
                     "getSofZmanShma",
-                    &[
-                        InvocationArg::from(java_start),
-                        InvocationArg::from(java_end),
-                    ],
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_shma_gra_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_sof_zman_shma_gra()
-                .map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getSofZmanShmaGRA",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_shma_mga_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_sof_zman_shma_mga()
-                .map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getSofZmanShmaMGA",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_tzais_72_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar.get_tzais_72().map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(&java_zmanim_calendar, "getTzais72", InvocationArg::empty())
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_candle_lighting_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar.get_candle_lighting().map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getCandleLighting",
-                    InvocationArg::empty(),
+                    &[InvocationArg::from(java_start), java_end, java_synchronous],
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
@@ -687,9 +547,15 @@ mod jni_tests {
 
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
+            let synchronous = rand::thread_rng().gen_bool(0.5);
+            let end_of_day = if rand::thread_rng().gen_bool(0.5) {
+                None
+            } else {
+                Some(end_of_day)
+            };
 
             let result = calendar
-                .get_sof_zman_tfila(start_of_day.clone(), end_of_day.clone())
+                ._get_sof_zman_tfila(start_of_day.clone(), end_of_day, synchronous)
                 .map(|d| d.timestamp_millis());
 
             let java_start = jvm
@@ -701,84 +567,29 @@ mod jni_tests {
                         .unwrap()],
                 )
                 .unwrap();
-            let java_end = jvm
-                .create_instance(
-                    "java.util.Date",
-                    &[InvocationArg::try_from(end_of_day.timestamp_millis())
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap()],
+            let java_end = if let Some(end_of_day) = end_of_day {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(end_of_day.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
                 )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+            let java_synchronous = InvocationArg::try_from(synchronous)
+                .unwrap()
+                .into_primitive()
                 .unwrap();
-
             let java_result = jvm
                 .invoke(
                     &java_zmanim_calendar,
                     "getSofZmanTfila",
-                    &[
-                        InvocationArg::from(java_start),
-                        InvocationArg::from(java_end),
-                    ],
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_tfila_gra_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_sof_zman_tfila_gra()
-                .map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getSofZmanTfilaGRA",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_tfila_mga_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_sof_zman_tfila_mga()
-                .map(|d| d.timestamp_millis());
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getSofZmanTfilaMGA",
-                    InvocationArg::empty(),
+                    &[InvocationArg::from(java_start), java_end, java_synchronous],
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
@@ -810,19 +621,31 @@ mod jni_tests {
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
 
+            let synchronous = rand::thread_rng().gen_bool(0.5);
+            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
+                None
+            } else {
+                Some(start_of_day)
+            };
+
             let result = calendar
-                .get_mincha_gedola(start_of_day.clone(), end_of_day.clone())
+                ._get_mincha_gedola(start_of_day.clone(), end_of_day.clone(), synchronous)
                 .map(|d| d.timestamp_millis());
 
-            let java_start = jvm
-                .create_instance(
-                    "java.util.Date",
-                    &[InvocationArg::try_from(start_of_day.timestamp_millis())
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap()],
+            let java_start = if let Some(start_of_day) = start_of_day {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(start_of_day.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
                 )
-                .unwrap();
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
             let java_end = jvm
                 .create_instance(
                     "java.util.Date",
@@ -832,45 +655,16 @@ mod jni_tests {
                         .unwrap()],
                 )
                 .unwrap();
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getMinchaGedola",
-                    &[
-                        InvocationArg::from(java_start),
-                        InvocationArg::from(java_end),
-                    ],
-                )
+            let java_synchronous = InvocationArg::try_from(synchronous)
+                .unwrap()
+                .into_primitive()
                 .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_mincha_gedola_default_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_mincha_gedola_default()
-                .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
                     &java_zmanim_calendar,
                     "getMinchaGedola",
-                    InvocationArg::empty(),
+                    &[java_start, InvocationArg::from(java_end), java_synchronous],
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
@@ -902,19 +696,32 @@ mod jni_tests {
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
 
+            let synchronous = rand::thread_rng().gen_bool(0.5);
+            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
+                None
+            } else {
+                Some(start_of_day)
+            };
+
             let result = calendar
-                .get_samuch_le_mincha_ketana(start_of_day.clone(), end_of_day.clone())
+                ._get_samuch_le_mincha_ketana(start_of_day.clone(), end_of_day, synchronous)
                 .map(|d| d.timestamp_millis());
 
-            let java_start = jvm
-                .create_instance(
-                    "java.util.Date",
-                    &[InvocationArg::try_from(start_of_day.timestamp_millis())
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap()],
+            let java_start = if let Some(start_of_day) = start_of_day {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(start_of_day.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
                 )
-                .unwrap();
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
             let java_end = jvm
                 .create_instance(
                     "java.util.Date",
@@ -924,15 +731,16 @@ mod jni_tests {
                         .unwrap()],
                 )
                 .unwrap();
+            let java_synchronous = InvocationArg::try_from(synchronous)
+                .unwrap()
+                .into_primitive()
+                .unwrap();
 
             let java_result = jvm
                 .invoke(
                     &java_zmanim_calendar,
                     "getSamuchLeMinchaKetana",
-                    &[
-                        InvocationArg::from(java_start),
-                        InvocationArg::from(java_end),
-                    ],
+                    &[java_start, InvocationArg::from(java_end), java_synchronous],
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
@@ -964,19 +772,32 @@ mod jni_tests {
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
 
+            let synchronous = rand::thread_rng().gen_bool(0.5);
+            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
+                None
+            } else {
+                Some(start_of_day)
+            };
+
             let result = calendar
-                .get_mincha_ketana(start_of_day.clone(), end_of_day.clone())
+                ._get_mincha_ketana(start_of_day.clone(), end_of_day.clone(), synchronous)
                 .map(|d| d.timestamp_millis());
 
-            let java_start = jvm
-                .create_instance(
-                    "java.util.Date",
-                    &[InvocationArg::try_from(start_of_day.timestamp_millis())
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap()],
+            let java_start = if let Some(start_of_day) = start_of_day {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(start_of_day.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
                 )
-                .unwrap();
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
             let java_end = jvm
                 .create_instance(
                     "java.util.Date",
@@ -986,45 +807,16 @@ mod jni_tests {
                         .unwrap()],
                 )
                 .unwrap();
-
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getMinchaKetana",
-                    &[
-                        InvocationArg::from(java_start),
-                        InvocationArg::from(java_end),
-                    ],
-                )
+            let java_synchronous = InvocationArg::try_from(synchronous)
+                .unwrap()
+                .into_primitive()
                 .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_mincha_ketana_default_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_mincha_ketana_default()
-                .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
                     &java_zmanim_calendar,
                     "getMinchaKetana",
-                    InvocationArg::empty(),
+                    &[java_start, InvocationArg::from(java_end), java_synchronous],
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
@@ -1056,19 +848,31 @@ mod jni_tests {
             let start_of_day = start_of_day.unwrap();
             let end_of_day = end_of_day.unwrap();
 
+            let synchronous = rand::thread_rng().gen_bool(0.5);
+            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
+                None
+            } else {
+                Some(start_of_day)
+            };
+
             let result = calendar
-                .get_plag_hamincha(start_of_day.clone(), end_of_day.clone())
+                ._get_plag_hamincha(start_of_day.clone(), end_of_day.clone(), synchronous)
                 .map(|d| d.timestamp_millis());
 
-            let java_start = jvm
-                .create_instance(
-                    "java.util.Date",
-                    &[InvocationArg::try_from(start_of_day.timestamp_millis())
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap()],
+            let java_start = if let Some(start_of_day) = start_of_day {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(start_of_day.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
                 )
-                .unwrap();
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
             let java_end = jvm
                 .create_instance(
                     "java.util.Date",
@@ -1079,44 +883,16 @@ mod jni_tests {
                 )
                 .unwrap();
 
-            let java_result = jvm
-                .invoke(
-                    &java_zmanim_calendar,
-                    "getPlagHamincha",
-                    &[
-                        InvocationArg::from(java_start),
-                        InvocationArg::from(java_end),
-                    ],
-                )
+            let java_synchronous = InvocationArg::try_from(synchronous)
+                .unwrap()
+                .into_primitive()
                 .unwrap();
-            let java_result = get_java_date_millis(&jvm, &java_result);
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_plag_hamincha_default_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
-
-            let result = calendar
-                .get_plag_hamincha_default()
-                .map(|d| d.timestamp_millis());
 
             let java_result = jvm
                 .invoke(
                     &java_zmanim_calendar,
                     "getPlagHamincha",
-                    InvocationArg::empty(),
+                    &[java_start, InvocationArg::from(java_end), java_synchronous],
                 )
                 .unwrap();
             let java_result = get_java_date_millis(&jvm, &java_result);
@@ -1220,7 +996,7 @@ mod jni_tests {
             let hours = rand::thread_rng().gen_range(0.0..=12.0);
 
             let result = calendar
-                .get_shaah_zmanis_based_zman(start_of_day.clone(), end_of_day.clone(), hours)
+                ._get_shaah_zmanis_based_zman(start_of_day.clone(), end_of_day.clone(), hours)
                 .map(|d| d.timestamp_millis());
 
             let java_start = jvm
@@ -1332,7 +1108,7 @@ mod jni_tests {
             let hours = rand::thread_rng().gen_range(-6.0..=6.0);
 
             let result = calendar
-                .get_half_day_based_zman(start_of_half_day.clone(), end_of_half_day.clone(), hours)
+                ._get_half_day_based_zman(start_of_half_day.clone(), end_of_half_day.clone(), hours)
                 .map(|d| d.timestamp_millis());
 
             let java_start = jvm
@@ -1400,7 +1176,7 @@ mod jni_tests {
             let end_of_half_day = end_of_half_day.unwrap();
 
             let result =
-                calendar.get_half_day_based_shaah_zmanis(&start_of_half_day, &end_of_half_day);
+                calendar._get_half_day_based_shaah_zmanis(&start_of_half_day, &end_of_half_day);
 
             let java_start = jvm
                 .create_instance(
@@ -1443,6 +1219,383 @@ mod jni_tests {
             let result_millis = result.map(|d| d.num_milliseconds());
 
             assert_almost_equal_i64_option(&result_millis, &java_result, 50, &message);
+        }
+        assert!(ran, "No test cases were run");
+    }
+
+    #[test]
+    fn test_get_sof_zman_kidush_levana_15_days_against_java() {
+        let jvm = init_jvm();
+        let mut ran = false;
+        for _ in 0..DEFAULT_TEST_ITERATIONS {
+            let test_case = create_zmanim_calendars(&jvm);
+            if test_case.is_none() {
+                continue;
+            }
+            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
+
+            // Check if the Jewish day is between 11-17 (inclusive)
+            let jewish_calendar = calendar._get_jewish_calendar();
+            let jewish_day = jewish_calendar.get_jewish_date().get_jewish_day_of_month();
+            if jewish_day < 11 || jewish_day > 17 {
+                continue;
+            }
+
+            ran = true;
+
+            // Get alos and tzais (can be None or Some)
+            let alos = calendar.get_zman(&Zman::Alos72);
+            let tzais = calendar.get_zman(&Zman::Tzais72);
+
+            // Add some random bit of time to alos and tzais
+
+            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let alos = alos.map(|d| d + alos_offset);
+            let tzais = tzais.map(|d| d + tzais_offset);
+
+            // Randomly decide whether to pass None or Some
+            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
+            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
+            let alos_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &alos
+                } else {
+                    &none_alos
+                };
+            let tzais_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &tzais
+                } else {
+                    &none_tzais
+                };
+
+            let result = calendar
+                ._get_sof_zman_kidush_levana_15_days(alos_for_test, tzais_for_test)
+                .map(|d| d.timestamp_millis());
+
+            let java_alos = if let Some(alos) = alos_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(alos.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_tzais = if let Some(tzais) = tzais_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(tzais.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_result = jvm
+                .invoke(
+                    &java_zmanim_calendar,
+                    "getSofZmanKidushLevana15Days",
+                    &[java_alos, java_tzais],
+                )
+                .unwrap();
+            let java_result = get_java_date_millis(&jvm, &java_result);
+
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
+        }
+        assert!(ran, "No test cases were run");
+    }
+
+    #[test]
+    fn test_get_tchilas_zman_kidush_levana_7_days_against_java() {
+        let jvm = init_jvm();
+        let mut ran = false;
+        for _ in 0..DEFAULT_TEST_ITERATIONS {
+            let test_case = create_zmanim_calendars(&jvm);
+            if test_case.is_none() {
+                continue;
+            }
+            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
+
+            // Check if the Jewish day is between 4-9 (inclusive)
+            let jewish_calendar = calendar._get_jewish_calendar();
+            let jewish_day = jewish_calendar.get_jewish_date().get_jewish_day_of_month();
+            if jewish_day < 4 || jewish_day > 9 {
+                continue;
+            }
+
+            ran = true;
+
+            // Get alos and tzais (can be None or Some)
+            let alos = calendar.get_zman(&Zman::Alos72);
+            let tzais = calendar.get_zman(&Zman::Tzais72);
+
+            // Add some random bit of time to alos and tzais
+            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let alos = alos.map(|d| d + alos_offset);
+            let tzais = tzais.map(|d| d + tzais_offset);
+
+            // Randomly decide whether to pass None or Some
+            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
+            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
+            let alos_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &alos
+                } else {
+                    &none_alos
+                };
+            let tzais_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &tzais
+                } else {
+                    &none_tzais
+                };
+
+            let result = calendar
+                ._get_tchilas_zman_kidush_levana_7_days(alos_for_test, tzais_for_test)
+                .map(|d| d.timestamp_millis());
+
+            let java_alos = if let Some(alos) = alos_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(alos.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_tzais = if let Some(tzais) = tzais_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(tzais.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_result = jvm
+                .invoke(
+                    &java_zmanim_calendar,
+                    "getTchilasZmanKidushLevana7Days",
+                    &[java_alos, java_tzais],
+                )
+                .unwrap();
+            let java_result = get_java_date_millis(&jvm, &java_result);
+
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
+        }
+        assert!(ran, "No test cases were run");
+    }
+
+    #[test]
+    fn test_get_tchilas_zman_kidush_levana_3_days_against_java() {
+        let jvm = init_jvm();
+        let mut ran = false;
+        for _ in 0..DEFAULT_TEST_ITERATIONS {
+            let test_case = create_zmanim_calendars(&jvm);
+            if test_case.is_none() {
+                continue;
+            }
+            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
+
+            // Check if the Jewish day is <= 5 OR >= 30
+            let jewish_calendar = calendar._get_jewish_calendar();
+            let jewish_day = jewish_calendar.get_jewish_date().get_jewish_day_of_month();
+            if jewish_day > 5 && jewish_day < 30 {
+                continue;
+            }
+
+            ran = true;
+
+            // Get alos and tzais (can be None or Some)
+            let alos = calendar.get_zman(&Zman::Alos72);
+            let tzais = calendar.get_zman(&Zman::Tzais72);
+
+            // Add some random bit of time to alos and tzais
+            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let alos = alos.map(|d| d + alos_offset);
+            let tzais = tzais.map(|d| d + tzais_offset);
+
+            // Randomly decide whether to pass None or Some
+            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
+            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
+            let alos_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &alos
+                } else {
+                    &none_alos
+                };
+            let tzais_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &tzais
+                } else {
+                    &none_tzais
+                };
+
+            let result = calendar
+                ._get_tchilas_zman_kidush_levana_3_days(alos_for_test, tzais_for_test)
+                .map(|d| d.timestamp_millis());
+
+            let java_alos = if let Some(alos) = alos_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(alos.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_tzais = if let Some(tzais) = tzais_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(tzais.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_result = jvm
+                .invoke(
+                    &java_zmanim_calendar,
+                    "getTchilasZmanKidushLevana3Days",
+                    &[java_alos, java_tzais],
+                )
+                .unwrap();
+            let java_result = get_java_date_millis(&jvm, &java_result);
+
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
+        }
+        assert!(ran, "No test cases were run");
+    }
+
+    #[test]
+    fn test_get_sof_zman_kidush_levana_between_moldos_against_java() {
+        let jvm = init_jvm();
+        let mut ran = false;
+        for _ in 0..DEFAULT_TEST_ITERATIONS {
+            let test_case = create_zmanim_calendars(&jvm);
+            if test_case.is_none() {
+                continue;
+            }
+            let (calendar, java_zmanim_calendar, message) = test_case.unwrap();
+
+            // Check if the Jewish day is between 11-16 (inclusive)
+            let jewish_calendar = calendar._get_jewish_calendar();
+            let jewish_day = jewish_calendar.get_jewish_date().get_jewish_day_of_month();
+            if jewish_day < 11 || jewish_day > 16 {
+                continue;
+            }
+
+            ran = true;
+
+            // Get alos and tzais (can be None or Some)
+            let alos = calendar.get_zman(&Zman::Alos72);
+            let tzais = calendar.get_zman(&Zman::Tzais72);
+
+            // Add some random bit of time to alos and tzais
+            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
+            let alos = alos.map(|d| d + alos_offset);
+            let tzais = tzais.map(|d| d + tzais_offset);
+
+            // Randomly decide whether to pass None or Some
+            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
+            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
+            let alos_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &alos
+                } else {
+                    &none_alos
+                };
+            let tzais_for_test: &Option<DateTime<chrono_tz::Tz>> =
+                if rand::thread_rng().gen_bool(0.5) {
+                    &tzais
+                } else {
+                    &none_tzais
+                };
+
+            let result = calendar
+                ._get_sof_zman_kidush_levana_between_moldos(alos_for_test, tzais_for_test)
+                .map(|d| d.timestamp_millis());
+
+            let java_alos = if let Some(alos) = alos_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(alos.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_tzais = if let Some(tzais) = tzais_for_test {
+                InvocationArg::from(
+                    jvm.create_instance(
+                        "java.util.Date",
+                        &[InvocationArg::try_from(tzais.timestamp_millis())
+                            .unwrap()
+                            .into_primitive()
+                            .unwrap()],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
+            };
+
+            let java_result = jvm
+                .invoke(
+                    &java_zmanim_calendar,
+                    "getSofZmanKidushLevanaBetweenMoldos",
+                    &[java_alos, java_tzais],
+                )
+                .unwrap();
+            let java_result = get_java_date_millis(&jvm, &java_result);
+
+            assert_almost_equal_i64_option(&result, &java_result, 50, &message);
         }
         assert!(ran, "No test cases were run");
     }

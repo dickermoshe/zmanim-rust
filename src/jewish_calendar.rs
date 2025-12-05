@@ -9,13 +9,13 @@ use icu_calendar::Gregorian;
 use crate::constants::*;
 use crate::daf::*;
 use crate::jewish_date::JewishDate;
-use crate::noaa_calculator::NOAACalculator;
+use crate::astronomical_calculator::NOAACalculator;
 use crate::parshas::*;
 #[cfg(feature = "no_std")]
 use core_maths::CoreFloat;
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct JewishCalendar {
-    jewish_date: JewishDate,
+    pub jewish_date: JewishDate,
     in_israel: bool,
     is_mukaf_choma: bool,
     use_modern_holidays: bool,
