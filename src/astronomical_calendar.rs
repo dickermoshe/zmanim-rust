@@ -1,42 +1,46 @@
 use chrono::{DateTime, Datelike, Days, Duration, Offset, TimeDelta, TimeZone, Utc};
 
 use crate::{
-    astronomical_calculator::{AstronomicalCalculatorTrait, NOAACalculator},
-    constants::*,
-    geolocation::{GeoLocation, GeoLocationTrait},
+    astronomical_calculator::AstronomicalCalculatorTrait, constants::*, defmt::DefmtFormatTrait,
+    geolocation::GeoLocationTrait,
 };
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct AstronomicalCalendar<Tz: TimeZone> {
+pub struct AstronomicalCalendar<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait> {
     pub date_time: DateTime<Tz>,
-    pub geo_location: GeoLocation,
-    pub noaa_calculator: NOAACalculator,
+    pub geo_location: G,
+    pub noaa_calculator: N,
 }
 
-impl<Tz: TimeZone> AstronomicalCalendar<Tz> {
-    pub fn new(date_time: DateTime<Tz>, geo_location: GeoLocation) -> Self {
+impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait> AstronomicalCalendar<Tz, G, N> {
+    pub fn new(date_time: DateTime<Tz>, geo_location: G, calculator: N) -> Self {
         Self {
             date_time,
             geo_location,
-            noaa_calculator: NOAACalculator::default(),
+            noaa_calculator: calculator,
         }
     }
     fn get_adjusted_date_time(&self, date_time: &DateTime<Tz>) -> Option<DateTime<Tz>> {
         let offset = self.get_geo_location().get_antimeridian_adjustment(date_time);
         if offset == 0 {
-            return Some(date_time.clone());
+            Some(date_time.clone())
         } else if offset > 0 {
-            return date_time.clone().checked_add_days(Days::new(offset.abs() as u64));
+            date_time
+                .clone()
+                .checked_add_days(Days::new(offset.unsigned_abs() as u64))
         } else {
-            return date_time.clone().checked_sub_days(Days::new(offset.abs() as u64));
+            date_time
+                .clone()
+                .checked_sub_days(Days::new(offset.unsigned_abs() as u64))
         }
     }
 }
 
-pub trait AstronomicalCalendarTrait<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait<G>> {
+pub trait AstronomicalCalendarTrait<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait>:
+    DefmtFormatTrait
+{
     fn get_date_time(&self) -> &DateTime<Tz>;
     fn get_geo_location(&self) -> &G;
-    fn get_noaa_calculator(&self) -> &N;
+    fn get_calculator(&self) -> &N;
 
     fn get_sunrise(&self) -> Option<DateTime<Tz>>;
 
@@ -83,16 +87,18 @@ pub trait AstronomicalCalendarTrait<Tz: TimeZone, G: GeoLocationTrait, N: Astron
     fn get_local_mean_time(&self, hours: f64) -> Option<DateTime<Tz>>;
 }
 
-impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> for AstronomicalCalendar<Tz> {
+impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait> AstronomicalCalendarTrait<Tz, G, N>
+    for AstronomicalCalendar<Tz, G, N>
+{
     fn get_date_time(&self) -> &DateTime<Tz> {
         &self.date_time
     }
 
-    fn get_geo_location(&self) -> &GeoLocation {
+    fn get_geo_location(&self) -> &G {
         &self.geo_location
     }
 
-    fn get_noaa_calculator(&self) -> &NOAACalculator {
+    fn get_calculator(&self) -> &N {
         &self.noaa_calculator
     }
     fn get_sunrise(&self) -> Option<DateTime<Tz>> {
@@ -169,12 +175,12 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
 
     fn get_utc_sunrise(&self, zenith: f64) -> Option<f64> {
         let adjusted_date_time = self.get_adjusted_date_time(self.get_date_time())?;
-        self.get_noaa_calculator()
+        self.get_calculator()
             .get_utc_sunrise(&adjusted_date_time, self.get_geo_location(), zenith, true)
     }
 
     fn get_utc_sea_level_sunrise(&self, zenith: f64) -> Option<f64> {
-        self.get_noaa_calculator().get_utc_sunrise(
+        self.get_calculator().get_utc_sunrise(
             &self.get_adjusted_date_time(self.get_date_time())?,
             self.get_geo_location(),
             zenith,
@@ -183,7 +189,7 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
     }
 
     fn get_utc_sunset(&self, zenith: f64) -> Option<f64> {
-        self.get_noaa_calculator().get_utc_sunset(
+        self.get_calculator().get_utc_sunset(
             &self.get_adjusted_date_time(self.get_date_time())?,
             self.get_geo_location(),
             zenith,
@@ -192,7 +198,7 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
     }
 
     fn get_utc_sea_level_sunset(&self, zenith: f64) -> Option<f64> {
-        self.get_noaa_calculator().get_utc_sunset(
+        self.get_calculator().get_utc_sunset(
             &self.get_adjusted_date_time(self.get_date_time())?,
             self.get_geo_location(),
             zenith,
@@ -213,7 +219,7 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
     fn get_sun_transit(&self) -> Option<DateTime<Tz>> {
         let adjusted_date_time = self.get_adjusted_date_time(self.get_date_time())?;
         let noon = self
-            .get_noaa_calculator()
+            .get_calculator()
             .get_utc_noon(&adjusted_date_time, self.get_geo_location());
         if noon.is_nan() {
             return None;
@@ -224,7 +230,7 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
     fn get_solar_midnight(&self) -> Option<DateTime<Tz>> {
         let adjusted_date_time = self.get_adjusted_date_time(self.get_date_time())?;
         let midnight = self
-            .get_noaa_calculator()
+            .get_calculator()
             .get_utc_midnight(&adjusted_date_time, self.get_geo_location());
         if midnight.is_nan() {
             return None;
@@ -259,6 +265,7 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
         calculated_time -= seconds as f64;
 
         let local_time_hours = (self.get_geo_location().get_longitude() / 15.0) as i64;
+        #[allow(clippy::if_same_then_else)]
         if solar_event == _SolarEvent::Sunrise && local_time_hours + hours > 18 {
             cal = cal.checked_sub_days(Days::new(1))?;
         } else if solar_event == _SolarEvent::Sunset && local_time_hours + hours < 6 {
@@ -280,12 +287,49 @@ impl<Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator> fo
     }
 
     fn get_local_mean_time(&self, hours: f64) -> Option<DateTime<Tz>> {
-        if hours < 0.0 || hours >= 24.0 {
+        if !(0.0..24.0).contains(&hours) {
             return None;
         }
         let timezone_offset_hours = self.date_time.offset().fix().local_minus_utc() as f64 / 60.0 / 60.0;
         let start = self.get_date_from_time(hours - timezone_offset_hours, _SolarEvent::Sunrise)?;
         let offset = self.get_geo_location().get_local_mean_time_offset(&self.date_time);
-        return Some(start - offset);
+        Some(start - offset)
+    }
+}
+
+impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait> DefmtFormatTrait
+    for AstronomicalCalendar<Tz, G, N>
+{
+}
+
+#[cfg(feature = "defmt")]
+impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait> defmt::Format
+    for AstronomicalCalendar<Tz, G, N>
+{
+    fn format(&self, f: defmt::Formatter) {
+        defmt::write!(
+            f,
+            "AstronomicalCalendar(date_time={:?},",
+            self.date_time.timestamp_millis(),
+        );
+
+        let offset = self.date_time.offset().fix().local_minus_utc();
+        let (sign, offset) = if offset < 0 { ('-', -offset) } else { ('+', offset) };
+        let sec = offset.rem_euclid(60);
+        let mins = offset.div_euclid(60);
+        let min = mins.rem_euclid(60);
+        let hour = mins.div_euclid(60);
+        if sec == 0 {
+            defmt::write!(f, "offset={}{:02}:{:02},", sign, hour, min)
+        } else {
+            defmt::write!(f, "offset={}{:02}:{:02}:{:02},", sign, hour, min, sec)
+        }
+
+        defmt::write!(
+            f,
+            "geo_location={:?}, noaa_calculator={:?})",
+            self.geo_location,
+            self.noaa_calculator
+        );
     }
 }

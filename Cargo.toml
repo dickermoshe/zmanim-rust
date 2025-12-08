@@ -54,3 +54,13 @@ crate-type = ["cdylib"]
 [profile.release]
 opt-level = "z"
 lto = true
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+index_overflow = "warn"
+
+
+[lints]
+workspace = true

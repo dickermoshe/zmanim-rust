@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Days;
@@ -6,23 +8,94 @@ use chrono::Utc;
 use icu_calendar::Date;
 use icu_calendar::Gregorian;
 
+use crate::astronomical_calculator::AstronomicalCalculatorTrait;
+use crate::astronomical_calculator::get_julian_day;
 use crate::constants::*;
 use crate::daf::*;
+use crate::defmt::DefmtFormatTrait;
+use crate::jewish_date::InternalJewishDateTrait;
 use crate::jewish_date::JewishDate;
-use crate::astronomical_calculator::NOAACalculator;
+use crate::jewish_date::JewishDateTrait;
 use crate::parshas::*;
 #[cfg(feature = "no_std")]
 use core_maths::CoreFloat;
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct JewishCalendar {
-    pub jewish_date: JewishDate,
-    in_israel: bool,
-    is_mukaf_choma: bool,
-    use_modern_holidays: bool,
-    calculator: NOAACalculator,
+
+pub(crate) trait InternalJewishCalendarTrait {
+    fn get_is_use_modern_holidays(&self) -> bool;
+    fn get_in_israel(&self) -> bool;
+    fn get_jewish_date(&self) -> &impl JewishDateTrait;
+    fn get_calculator(&self) -> &impl AstronomicalCalculatorTrait;
+    fn get_is_mukaf_choma(&self) -> bool;
+}
+#[allow(private_bounds)]
+pub trait JewishCalendarTrait: InternalJewishCalendarTrait + DefmtFormatTrait {
+    fn get_yom_tov_index(&self) -> Option<JewishHoliday>;
+    fn is_yom_tov(&self) -> bool;
+    fn is_yom_tov_assur_bemelacha(&self) -> bool;
+    fn is_assur_bemelacha(&self) -> bool;
+    fn has_candle_lighting(&self) -> bool;
+    fn is_tomorrow_shabbos_or_yom_tov(&self) -> bool;
+    fn is_erev_yom_tov_sheni(&self) -> bool;
+    fn is_aseres_yemei_teshuva(&self) -> bool;
+    fn is_pesach(&self) -> bool;
+    fn is_chol_hamoed_pesach(&self) -> bool;
+    fn is_shavuos(&self) -> bool;
+    fn is_rosh_hashana(&self) -> bool;
+    fn is_yom_kippur(&self) -> bool;
+    fn is_succos(&self) -> bool;
+    fn is_hoshana_rabba(&self) -> bool;
+    fn is_shemini_atzeres(&self) -> bool;
+    fn is_simchas_torah(&self) -> bool;
+    fn is_chol_hamoed_succos(&self) -> bool;
+    fn is_chol_hamoed(&self) -> bool;
+    fn is_erev_yom_tov(&self) -> bool;
+    fn is_rosh_chodesh(&self) -> bool;
+    fn is_isru_chag(&self) -> bool;
+    fn is_taanis(&self) -> bool;
+    fn is_taanis_bechoros(&self) -> bool;
+    fn get_day_of_chanukah(&self) -> Option<u8>;
+    fn is_chanukah(&self) -> bool;
+    fn is_purim(&self) -> bool;
+    fn get_day_of_omer(&self) -> Option<u8>;
+    fn is_tisha_beav(&self) -> bool;
+    fn get_parshah(&self) -> Option<Parsha>;
+    fn get_daf_yomi_bavli(&self) -> Option<BavliDaf>;
+    fn get_daf_yomi_yerushalmi(&self) -> Option<YerushalmiDaf>;
+    fn is_birkas_hachamah(&self) -> bool;
+    fn is_erev_rosh_chodesh(&self) -> bool;
+    fn is_yom_kippur_katan(&self) -> bool;
+    fn is_be_hab(&self) -> bool;
+    fn is_machar_chodesh(&self) -> bool;
+    fn is_shabbos_mevorchim(&self) -> bool;
+    fn get_upcoming_parshah(&self) -> Option<Parsha>;
+    fn get_special_shabbos(&self) -> Option<Parsha>;
+    fn get_molad_as_date(&self) -> Option<DateTime<Utc>>;
+    fn get_tchilaszman_kidush_levana_3_days(&self) -> Option<DateTime<Utc>>;
+    fn get_tchilaszman_kidush_levana_7_days(&self) -> Option<DateTime<Utc>>;
+    fn get_sof_zman_kidush_levana_between_moldos(&self) -> Option<DateTime<Utc>>;
+    fn get_sof_zman_kidush_levana_15_days(&self) -> Option<DateTime<Utc>>;
+    fn get_tekufas_tishrei_elapsed_days(&self) -> i64;
+    fn is_vesein_tal_umatar_start_date(&self) -> bool;
+    fn is_vesein_tal_umatar_starting_tonight(&self) -> bool;
+    fn is_vesein_tal_umatar_recited(&self) -> bool;
+    fn is_vesein_beracha_recited(&self) -> bool;
+    fn is_mashiv_haruach_start_date(&self) -> bool;
+    fn is_mashiv_haruach_end_date(&self) -> bool;
+    fn is_mashiv_haruach_recited(&self) -> Option<bool>;
+    fn is_morid_hatal_recited(&self) -> Option<bool>;
 }
 
-impl JewishCalendar {
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq)]
+pub struct JewishCalendar<N: AstronomicalCalculatorTrait> {
+    pub jewish_date: JewishDate,
+    pub in_israel: bool,
+    pub is_mukaf_choma: bool,
+    pub use_modern_holidays: bool,
+    calculator: N,
+}
+
+impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     pub fn from_gregorian_date(
         year: i32,
         month: u8,
@@ -30,6 +103,7 @@ impl JewishCalendar {
         in_israel: bool,
         is_mukaf_choma: bool,
         use_modern_holidays: bool,
+        calculator: N,
     ) -> Option<Self> {
         let jewish_date = JewishDate::from_gregorian_date(year, month, day)?;
         Some(Self {
@@ -37,45 +111,41 @@ impl JewishCalendar {
             in_israel,
             is_mukaf_choma,
             use_modern_holidays,
-            calculator: NOAACalculator,
+            calculator,
         })
     }
 
-    pub fn from_hebrew_date(
+    pub fn from_jewish_date(
         year: i32,
         month: JewishMonth,
         day: u8,
         in_israel: bool,
         is_mukaf_choma: bool,
         use_modern_holidays: bool,
+        calculator: N,
     ) -> Option<Self> {
-        let jewish_date = JewishDate::from_hebrew_date(year, month, day)?;
+        let jewish_date = JewishDate::from_jewish_date(year, month, day)?;
         Some(Self {
             jewish_date,
             in_israel,
             is_mukaf_choma,
             use_modern_holidays,
-            calculator: NOAACalculator,
+            calculator,
         })
     }
 
-    /// Returns a reference to the underlying JewishDate.
-    pub fn get_jewish_date(&self) -> &JewishDate {
-        &self.jewish_date
-    }
     fn get_num_of_special_days(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u64> {
         let start_year =
-            JewishDate::from_gregorian_date(start.year(), start.month() as u8, start.day() as u8)?
-                .get_jewish_year();
+            JewishDate::from_gregorian_date(start.year(), start.month() as u8, start.day() as u8)?.get_jewish_year();
         let end_year =
-            JewishDate::from_gregorian_date(end.year(), end.month() as u8, end.day() as u8)?
-                .get_jewish_year();
-
+            JewishDate::from_gregorian_date(end.year(), end.month() as u8, end.day() as u8)?.get_jewish_year();
+        println!("RUST: start_year: {}", start_year);
+        println!("RUST: end_year: {}", end_year);
         let mut special_days = 0u64;
         for i in start_year..=end_year {
             // Create new calendar instances for each year
-            let yom_kippur_date = JewishDate::from_hebrew_date(i, JewishMonth::Tishrei, 10)?;
-            let tisha_beav_date = JewishDate::from_hebrew_date(i, JewishMonth::Av, 9)?;
+            let yom_kippur_date = JewishDate::from_jewish_date(i, JewishMonth::Tishrei, 10)?;
+            let tisha_beav_date = JewishDate::from_jewish_date(i, JewishMonth::Av, 9)?;
 
             // Get Gregorian dates and convert to DateTime<Utc>
             let yom_kippur_dt = icu_to_naive(&yom_kippur_date.get_gregorian_date())?;
@@ -95,10 +165,9 @@ impl JewishCalendar {
         end.signed_duration_since(start).num_days() as u64
     }
 
-    fn get_parsha_year_type(&self) -> Option<i32> {
+    fn get_parsha_list(&self) -> Option<ParshaList> {
         let rosh_hashana_day_of_week =
-            (JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year()) + 1)
-                % 7;
+            (JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year()) + 1) % 7;
         let rosh_hashana_day_of_week = if rosh_hashana_day_of_week == 0 {
             7
         } else {
@@ -109,34 +178,46 @@ impl JewishCalendar {
             match rosh_hashana_day_of_week {
                 2 => {
                     if self.jewish_date.is_kislev_short() {
-                        if self.in_israel { Some(14) } else { Some(6) }
+                        if self.in_israel {
+                            Some(PARSHA_LIST_14)
+                        } else {
+                            Some(PARSHA_LIST_6)
+                        }
                     } else if self.jewish_date.is_cheshvan_long() {
-                        if self.in_israel { Some(15) } else { Some(7) }
+                        if self.in_israel {
+                            Some(PARSHA_LIST_15)
+                        } else {
+                            Some(PARSHA_LIST_7)
+                        }
                     } else {
                         None
                     }
                 }
                 3 => {
                     if self.in_israel {
-                        Some(15)
+                        Some(PARSHA_LIST_15)
                     } else {
-                        Some(7)
+                        Some(PARSHA_LIST_7)
                     }
                 }
                 5 => {
                     if self.jewish_date.is_kislev_short() {
-                        Some(8)
+                        Some(PARSHA_LIST_8)
                     } else if self.jewish_date.is_cheshvan_long() {
-                        Some(9)
+                        Some(PARSHA_LIST_9)
                     } else {
                         None
                     }
                 }
                 7 => {
                     if self.jewish_date.is_kislev_short() {
-                        Some(10)
+                        Some(PARSHA_LIST_10)
                     } else if self.jewish_date.is_cheshvan_long() {
-                        if self.in_israel { Some(16) } else { Some(11) }
+                        if self.in_israel {
+                            Some(PARSHA_LIST_16)
+                        } else {
+                            Some(PARSHA_LIST_11)
+                        }
                     } else {
                         None
                     }
@@ -147,34 +228,42 @@ impl JewishCalendar {
             match rosh_hashana_day_of_week {
                 2 => {
                     if self.jewish_date.is_kislev_short() {
-                        Some(0)
+                        Some(PARSHA_LIST_0)
                     } else if self.jewish_date.is_cheshvan_long() {
-                        if self.in_israel { Some(12) } else { Some(1) }
+                        if self.in_israel {
+                            Some(PARSHA_LIST_12)
+                        } else {
+                            Some(PARSHA_LIST_1)
+                        }
                     } else {
                         None
                     }
                 }
                 3 => {
                     if self.in_israel {
-                        Some(12)
+                        Some(PARSHA_LIST_12)
                     } else {
-                        Some(1)
+                        Some(PARSHA_LIST_1)
                     }
                 }
                 5 => {
                     if self.jewish_date.is_cheshvan_long() {
-                        Some(3)
+                        Some(PARSHA_LIST_3)
                     } else if !self.jewish_date.is_kislev_short() {
-                        if self.in_israel { Some(13) } else { Some(2) }
+                        if self.in_israel {
+                            Some(PARSHA_LIST_13)
+                        } else {
+                            Some(PARSHA_LIST_2)
+                        }
                     } else {
                         None
                     }
                 }
                 7 => {
                     if self.jewish_date.is_kislev_short() {
-                        Some(4)
+                        Some(PARSHA_LIST_4)
                     } else if self.jewish_date.is_cheshvan_long() {
-                        Some(5)
+                        Some(PARSHA_LIST_5)
                     } else {
                         None
                     }
@@ -185,19 +274,26 @@ impl JewishCalendar {
     }
 }
 
-impl JewishCalendarTrait for JewishCalendar {
-    fn get_jewish_date(&self) -> &impl JewishDateTrait {
-        &self.jewish_date
+impl<N: AstronomicalCalculatorTrait> InternalJewishCalendarTrait for JewishCalendar<N> {
+    fn get_is_use_modern_holidays(&self) -> bool {
+        self.use_modern_holidays
     }
     fn get_in_israel(&self) -> bool {
         self.in_israel
     }
+    fn get_jewish_date(&self) -> &impl JewishDateTrait {
+        &self.jewish_date
+    }
+
+    fn get_calculator(&self) -> &impl AstronomicalCalculatorTrait {
+        &self.calculator
+    }
+
     fn get_is_mukaf_choma(&self) -> bool {
         self.is_mukaf_choma
     }
-    fn get_is_use_modern_holidays(&self) -> bool {
-        self.use_modern_holidays
-    }
+}
+impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     fn get_yom_tov_index(&self) -> Option<JewishHoliday> {
         let day = self.jewish_date.get_jewish_day_of_month();
         let day_of_week = self.jewish_date.get_day_of_week();
@@ -220,9 +316,7 @@ impl JewishCalendarTrait for JewishCalendar {
                 if self.use_modern_holidays
                     && ((day == 26 && day_of_week == DayOfWeek::Thursday)
                         || (day == 28 && day_of_week == DayOfWeek::Monday)
-                        || (day == 27
-                            && day_of_week != DayOfWeek::Sunday
-                            && day_of_week != DayOfWeek::Friday))
+                        || (day == 27 && day_of_week != DayOfWeek::Sunday && day_of_week != DayOfWeek::Friday))
                 {
                     return Some(JewishHoliday::YomHaShoah);
                 }
@@ -267,17 +361,13 @@ impl JewishCalendarTrait for JewishCalendar {
             }
 
             JewishMonth::Tammuz => {
-                if (day == 17 && day_of_week != DayOfWeek::Shabbos)
-                    || (day == 18 && day_of_week == DayOfWeek::Sunday)
-                {
+                if (day == 17 && day_of_week != DayOfWeek::Shabbos) || (day == 18 && day_of_week == DayOfWeek::Sunday) {
                     return Some(JewishHoliday::SeventeenthOfTammuz);
                 }
             }
 
             JewishMonth::Av => {
-                if (day_of_week == DayOfWeek::Sunday && day == 10)
-                    || (day_of_week != DayOfWeek::Shabbos && day == 9)
-                {
+                if (day_of_week == DayOfWeek::Sunday && day == 10) || (day_of_week != DayOfWeek::Shabbos && day == 9) {
                     return Some(JewishHoliday::TishahBav);
                 }
                 if day == 15 {
@@ -295,9 +385,7 @@ impl JewishCalendarTrait for JewishCalendar {
                 if day == 1 || day == 2 {
                     return Some(JewishHoliday::RoshHashana);
                 }
-                if (day == 3 && day_of_week != DayOfWeek::Shabbos)
-                    || (day == 4 && day_of_week == DayOfWeek::Sunday)
-                {
+                if (day == 3 && day_of_week != DayOfWeek::Shabbos) || (day == 4 && day_of_week == DayOfWeek::Sunday) {
                     return Some(JewishHoliday::FastOfGedalyah);
                 }
                 if day == 9 {
@@ -356,9 +444,7 @@ impl JewishCalendarTrait for JewishCalendar {
             JewishMonth::Adar => {
                 if !self.jewish_date.is_jewish_leap_year() {
                     if ((day == 11 || day == 12) && day_of_week == DayOfWeek::Thursday)
-                        || (day == 13
-                            && !(day_of_week == DayOfWeek::Friday
-                                || day_of_week == DayOfWeek::Shabbos))
+                        || (day == 13 && !(day_of_week == DayOfWeek::Friday || day_of_week == DayOfWeek::Shabbos))
                     {
                         return Some(JewishHoliday::FastOfEsther);
                     }
@@ -380,8 +466,7 @@ impl JewishCalendarTrait for JewishCalendar {
 
             JewishMonth::AdarII => {
                 if ((day == 11 || day == 12) && day_of_week == DayOfWeek::Thursday)
-                    || (day == 13
-                        && !(day_of_week == DayOfWeek::Friday || day_of_week == DayOfWeek::Shabbos))
+                    || (day == 13 && !(day_of_week == DayOfWeek::Friday || day_of_week == DayOfWeek::Shabbos))
                 {
                     return Some(JewishHoliday::FastOfEsther);
                 }
@@ -432,8 +517,7 @@ impl JewishCalendarTrait for JewishCalendar {
     }
 
     fn is_assur_bemelacha(&self) -> bool {
-        self.jewish_date.get_day_of_week() == DayOfWeek::Shabbos
-            || self.is_yom_tov_assur_bemelacha()
+        self.jewish_date.get_day_of_week() == DayOfWeek::Shabbos || self.is_yom_tov_assur_bemelacha()
     }
 
     fn has_candle_lighting(&self) -> bool {
@@ -500,9 +584,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let holiday_index = self.get_yom_tov_index();
         matches!(
             holiday_index,
-            Some(JewishHoliday::Succos)
-                | Some(JewishHoliday::CholHamoedSuccos)
-                | Some(JewishHoliday::HoshanaRabbah)
+            Some(JewishHoliday::Succos) | Some(JewishHoliday::CholHamoedSuccos) | Some(JewishHoliday::HoshanaRabbah)
         )
     }
 
@@ -570,8 +652,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let day_of_week = self.jewish_date.get_day_of_week() as i32;
         let month = self.jewish_date.get_jewish_month() as i32;
 
-        month == JewishMonth::Nissan as i32
-            && ((day == 14 && day_of_week != 7) || (day == 12 && day_of_week == 5))
+        month == JewishMonth::Nissan as i32 && ((day == 14 && day_of_week != 7) || (day == 12 && day_of_week == 5))
     }
 
     fn get_day_of_chanukah(&self) -> Option<u8> {
@@ -600,9 +681,9 @@ impl JewishCalendarTrait for JewishCalendar {
         // even when in a mukaf choma.
         let holiday_index = self.get_yom_tov_index();
         if self.is_mukaf_choma {
-            return holiday_index == Some(JewishHoliday::ShushanPurim);
+            holiday_index == Some(JewishHoliday::ShushanPurim)
         } else {
-            return holiday_index == Some(JewishHoliday::Purim);
+            holiday_index == Some(JewishHoliday::Purim)
         }
     }
 
@@ -630,63 +711,38 @@ impl JewishCalendarTrait for JewishCalendar {
             return None;
         }
 
-        let year_type = self.get_parsha_year_type();
-        if year_type.is_none() {
-            return None;
-        }
+        let parsha_list = self.get_parsha_list()?;
 
         let rosh_hashana_day_of_week =
             JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year()) % 7;
         let day = rosh_hashana_day_of_week + self.jewish_date.get_days_since_start_of_jewish_year();
-        match year_type {
-            Some(0) => PARSHA_LIST_0[(day / 7) as usize],
-            Some(1) => PARSHA_LIST_1[(day / 7) as usize],
-            Some(2) => PARSHA_LIST_2[(day / 7) as usize],
-            Some(3) => PARSHA_LIST_3[(day / 7) as usize],
-            Some(4) => PARSHA_LIST_4[(day / 7) as usize],
-            Some(5) => PARSHA_LIST_5[(day / 7) as usize],
-            Some(6) => PARSHA_LIST_6[(day / 7) as usize],
-            Some(7) => PARSHA_LIST_7[(day / 7) as usize],
-            Some(8) => PARSHA_LIST_8[(day / 7) as usize],
-            Some(9) => PARSHA_LIST_9[(day / 7) as usize],
-            Some(10) => PARSHA_LIST_10[(day / 7) as usize],
-            Some(11) => PARSHA_LIST_11[(day / 7) as usize],
-            Some(12) => PARSHA_LIST_12[(day / 7) as usize],
-            Some(13) => PARSHA_LIST_13[(day / 7) as usize],
-            Some(14) => PARSHA_LIST_14[(day / 7) as usize],
-            Some(15) => PARSHA_LIST_15[(day / 7) as usize],
-            Some(16) => PARSHA_LIST_16[(day / 7) as usize],
-            _ => None,
-        }
+        parsha_list[(day / 7) as usize]
     }
 
-    fn get_daf_yomi_bavli(&self) -> Option<impl BavliDafTrait> {
+    fn get_daf_yomi_bavli(&self) -> Option<BavliDaf> {
         let date = icu_to_naive(&self.jewish_date.get_gregorian_date())?;
         let milliseconds_since_epoch = date.timestamp_millis();
 
-        let daf_yomi_julian_start =
-            self.calculator._get_julian_day(&_BAVLI_DAF_YOMI_START_DAY) as i64;
-        let shekalim_julian_change =
-            self.calculator._get_julian_day(&_BAVLI_SHEKALIM_CHANGE_DAY) as i64;
+        let daf_yomi_julian_start = get_julian_day(&_BAVLI_DAF_YOMI_START_DAY) as i64;
+        let shekalim_julian_change = get_julian_day(&_BAVLI_SHEKALIM_CHANGE_DAY) as i64;
 
         if milliseconds_since_epoch < _BAVLI_DAF_YOMI_START_DAY.timestamp_millis() {
             return None;
         }
 
-        let julian_day = self.calculator._get_julian_day(&date) as i64;
-        let (cycle_no, daf_no) =
-            if milliseconds_since_epoch >= _BAVLI_SHEKALIM_CHANGE_DAY.timestamp_millis() {
-                let cycle_no = 8 + ((julian_day - shekalim_julian_change) / 2711);
-                let daf_no = (julian_day - shekalim_julian_change) % 2711;
-                (cycle_no, daf_no)
-            } else {
-                let cycle_no = 1 + ((julian_day - daf_yomi_julian_start) / 2702);
-                let daf_no = (julian_day - daf_yomi_julian_start) % 2702;
-                (cycle_no, daf_no)
-            };
+        let julian_day = get_julian_day(&date) as i64;
+        let (cycle_no, daf_no) = if milliseconds_since_epoch >= _BAVLI_SHEKALIM_CHANGE_DAY.timestamp_millis() {
+            let cycle_no = 8 + ((julian_day - shekalim_julian_change) / 2711);
+            let daf_no = (julian_day - shekalim_julian_change) % 2711;
+            (cycle_no, daf_no)
+        } else {
+            let cycle_no = 1 + ((julian_day - daf_yomi_julian_start) / 2702);
+            let daf_no = (julian_day - daf_yomi_julian_start) % 2702;
+            (cycle_no, daf_no)
+        };
         let mut blatt_per_bavli_tractate: [i64; 40] = [
-            64, 157, 105, 121, 22, 88, 56, 40, 35, 31, 32, 29, 27, 122, 112, 91, 66, 49, 90, 82,
-            119, 119, 176, 113, 24, 49, 76, 14, 120, 110, 142, 61, 34, 34, 28, 22, 4, 9, 5, 73,
+            64, 157, 105, 121, 22, 88, 56, 40, 35, 31, 32, 29, 27, 122, 112, 91, 66, 49, 90, 82, 119, 119, 176, 113,
+            24, 49, 76, 14, 120, 110, 142, 61, 34, 34, 28, 22, 4, 9, 5, 73,
         ];
 
         if cycle_no <= 7 {
@@ -698,7 +754,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let mut blatt = 0;
 
         for (i, &blatt_count) in blatt_per_bavli_tractate.iter().enumerate() {
-            masechta = i as i64;
+            masechta = i as i8;
             total = total + blatt_count - 1;
             if daf_no < total {
                 blatt = 1 + blatt_count - (total - daf_no);
@@ -713,54 +769,100 @@ impl JewishCalendarTrait for JewishCalendar {
                 break;
             }
         }
+        if masechta < 0 {
+            None
+        } else {
+            let tractate: BavliTractate = (masechta as u8).try_into().ok()?;
 
-        let tractate: BavliTractate = masechta.try_into().ok()?;
-
-        Some(BavliDaf {
-            tractate,
-            daf_index: blatt,
-        })
+            Some(BavliDaf {
+                tractate,
+                daf_index: blatt,
+            })
+        }
     }
 
-    fn get_daf_yomi_yerushalmi(&self) -> Option<impl YerushalmiDafTrait> {
+    fn get_daf_yomi_yerushalmi(&self) -> Option<YerushalmiDaf> {
         let requested_date = icu_to_naive(&self.jewish_date.get_gregorian_date())?;
+
+        println!("=== RUST get_daf_yomi_yerushalmi DEBUG ===");
+        println!("RUST: Requested date: {:?}", requested_date);
 
         let milliseconds_since_epoch = requested_date.timestamp_millis();
         let mut tractate: i64 = 0;
         if self.get_yom_tov_index() == Some(JewishHoliday::YomKippur)
             || self.get_yom_tov_index() == Some(JewishHoliday::TishahBav)
+            || milliseconds_since_epoch < _YERUSHALMI_DAF_YOMI_START_DAY.timestamp_millis()
         {
             return None;
-        } else if milliseconds_since_epoch < _YERUSHALMI_DAF_YOMI_START_DAY.timestamp_millis() {
-            return None;
         }
 
-        let mut next_cycle = DateTime::<Utc>::from_timestamp_millis(
-            _YERUSHALMI_DAF_YOMI_START_DAY.timestamp_millis(),
-        )?;
-        let mut prev_cycle = next_cycle.clone();
+        fn calc_next_cycle<N: AstronomicalCalculatorTrait>(
+            calendar: &JewishCalendar<N>,
+            start: DateTime<Utc>,
+        ) -> Option<DateTime<Utc>> {
+            let mut next_cycle = start.checked_add_days(Days::new(_YERUSHALMI_LENGTH - 1))?;
+            let special_days_in_cycle = calendar.get_num_of_special_days(start, next_cycle)?;
+            next_cycle = next_cycle.checked_add_days(Days::new(special_days_in_cycle))?;
+            Some(next_cycle)
+        }
+
+        let mut prev_cycle = _YERUSHALMI_DAF_YOMI_START_DAY;
+        let mut next_cycle = calc_next_cycle(self, prev_cycle)?;
+
+        fn get_next_cycle<N: AstronomicalCalculatorTrait>(
+            calendar: &JewishCalendar<N>,
+            next_cycle: DateTime<Utc>,
+        ) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+            let prev_cycle = next_cycle.checked_add_days(Days::new(1))?;
+            let next_cycle = calc_next_cycle(calendar, prev_cycle)?;
+            Some((prev_cycle, next_cycle))
+        }
+
+        println!("RUST: DAF_YOMI_START_DAY: {:?}", _YERUSHALMI_DAF_YOMI_START_DAY);
+        println!("RUST: YERUSHALMI_LENGTH: {}", _YERUSHALMI_LENGTH);
 
         while requested_date > next_cycle {
-            prev_cycle = next_cycle;
-            next_cycle = next_cycle.checked_add_days(Days::new(_YERUSHALMI_LENGTH as u64))?;
-            next_cycle = next_cycle.checked_add_days(Days::new(
-                self.get_num_of_special_days(prev_cycle, next_cycle)?,
-            ))?;
+            (prev_cycle, next_cycle) = get_next_cycle(self, next_cycle)?;
         }
 
+        println!(
+            "RUST: Found cycle: prev_cycle={:?}, next_cycle={:?}",
+            prev_cycle, next_cycle
+        );
+
         let daf_num = self.get_diff_between_days(prev_cycle, requested_date);
+        println!("RUST: Days from cycle start (daf_num): {}", daf_num);
+
         let special_days = self.get_num_of_special_days(prev_cycle, requested_date)?;
+        println!("RUST: Special days to subtract: {}", special_days);
+
         let total = if special_days > daf_num {
+            println!(
+                "RUST: Special days ({}) > daf_num ({}) - returning None",
+                special_days, daf_num
+            );
             return None;
         } else {
             daf_num - special_days
         };
         let mut total = total as i64;
+        println!("RUST: Total daf number in cycle: {}", total);
 
-        for blatt_count in BLATT_PER_YERUSHALMI_TRACTATE.iter() {
+        let original_total = total;
+        for (idx, blatt_count) in BLATT_PER_YERUSHALMI_TRACTATE.iter().enumerate() {
+            println!(
+                "RUST: Checking tractate {} with {} blatt, remaining total={}",
+                idx, blatt_count, total
+            );
             if total < *blatt_count as i64 {
-                let tractate: YerushalmiTractate = tractate.try_into().unwrap();
-
+                let tractate: YerushalmiTractate = tractate.try_into().ok()?;
+                println!(
+                    "RUST: Found daf: tractate={:?} ({}), daf={}",
+                    tractate,
+                    tractate as i64,
+                    total + 1
+                );
+                println!("=== RUST END DEBUG ===\n");
                 return Some(YerushalmiDaf {
                     tractate,
                     daf_index: (total + 1) as i64,
@@ -769,15 +871,12 @@ impl JewishCalendarTrait for JewishCalendar {
             total -= *blatt_count as i64;
             tractate += 1;
         }
-        Some(YerushalmiDaf {
-            tractate: YerushalmiTractate::Berachos,
-            daf_index: 1,
-        })
+
+        None
     }
 
     fn is_birkas_hachamah(&self) -> bool {
-        let elapsed_days =
-            JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year());
+        let elapsed_days = JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year());
         let elapsed_days = elapsed_days + self.jewish_date.get_days_since_start_of_jewish_year();
         let cycle_length = 10227i32;
         (elapsed_days % cycle_length) == 172
@@ -786,8 +885,7 @@ impl JewishCalendarTrait for JewishCalendar {
     // Extended holiday checks
     fn is_erev_rosh_chodesh(&self) -> bool {
         // Erev Rosh Hashana is not Erev Rosh Chodesh
-        self.jewish_date.get_jewish_day_of_month() == 29
-            && self.jewish_date.get_jewish_month() != JewishMonth::Elul
+        self.jewish_date.get_jewish_day_of_month() == 29 && self.jewish_date.get_jewish_month() != JewishMonth::Elul
     }
 
     fn is_yom_kippur_katan(&self) -> bool {
@@ -829,8 +927,7 @@ impl JewishCalendarTrait for JewishCalendar {
     fn is_machar_chodesh(&self) -> bool {
         // Shabbos and tomorrow is Rosh Chodesh (30th or 29th of month)
         self.jewish_date.get_day_of_week() == DayOfWeek::Shabbos
-            && (self.jewish_date.get_jewish_day_of_month() == 30
-                || self.jewish_date.get_jewish_day_of_month() == 29)
+            && (self.jewish_date.get_jewish_day_of_month() == 30 || self.jewish_date.get_jewish_day_of_month() == 29)
     }
 
     fn is_shabbos_mevorchim(&self) -> bool {
@@ -848,7 +945,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let days_to_shabbos = if day_of_week == DayOfWeek::Shabbos {
             7 // If today is Shabbos, get next Shabbos
         } else {
-            ((DayOfWeek::Shabbos as u8 - day_of_week as u8 + 7) % 7) as u8
+            (DayOfWeek::Shabbos as u8 - day_of_week as u8 + 7) % 7
         };
 
         // Create a new calendar for the upcoming Shabbos
@@ -857,8 +954,7 @@ impl JewishCalendarTrait for JewishCalendar {
         let mut upcoming_day = self.jewish_date.get_jewish_day_of_month() + days_to_shabbos;
 
         // Handle month/year overflow
-        let days_in_month =
-            JewishDate::get_days_in_jewish_month_static(upcoming_month.into(), upcoming_year);
+        let days_in_month = JewishDate::get_days_in_jewish_month_static(upcoming_month, upcoming_year);
         while upcoming_day > days_in_month {
             upcoming_day -= days_in_month;
             upcoming_month = match upcoming_month {
@@ -866,30 +962,28 @@ impl JewishCalendarTrait for JewishCalendar {
                     upcoming_year += 1;
                     JewishMonth::Tishrei
                 }
-                JewishMonth::Adar if !JewishDate::is_jewish_leap_year_static(upcoming_year) => {
-                    JewishMonth::Nissan
-                }
+                JewishMonth::Adar if !JewishDate::is_jewish_leap_year_static(upcoming_year) => JewishMonth::Nissan,
                 JewishMonth::AdarII => JewishMonth::Nissan,
                 _ => {
                     let month_num: u8 = upcoming_month.into();
                     (month_num + 1).try_into().ok()?
                 }
             };
-            let days_in_month =
-                JewishDate::get_days_in_jewish_month_static(upcoming_month.into(), upcoming_year);
+            let days_in_month = JewishDate::get_days_in_jewish_month_static(upcoming_month, upcoming_year);
             if upcoming_day > days_in_month {
                 continue;
             }
         }
 
         // Get parshah for that date
-        let upcoming_calendar = JewishCalendar::from_hebrew_date(
+        let upcoming_calendar = JewishCalendar::from_jewish_date(
             upcoming_year,
             upcoming_month,
             upcoming_day,
             self.in_israel,
             self.is_mukaf_choma,
             self.use_modern_holidays,
+            self.calculator.clone(),
         )?;
 
         let mut parshah = upcoming_calendar.get_parshah();
@@ -901,8 +995,7 @@ impl JewishCalendarTrait for JewishCalendar {
 
         while parshah.is_none() {
             temp_day += 7;
-            let days_in_month =
-                JewishDate::get_days_in_jewish_month_static(temp_month.into(), temp_year);
+            let days_in_month = JewishDate::get_days_in_jewish_month_static(temp_month, temp_year);
             if temp_day > days_in_month {
                 temp_day -= days_in_month;
                 temp_month = match temp_month {
@@ -910,9 +1003,7 @@ impl JewishCalendarTrait for JewishCalendar {
                         temp_year += 1;
                         JewishMonth::Tishrei
                     }
-                    JewishMonth::Adar if !JewishDate::is_jewish_leap_year_static(temp_year) => {
-                        JewishMonth::Nissan
-                    }
+                    JewishMonth::Adar if !JewishDate::is_jewish_leap_year_static(temp_year) => JewishMonth::Nissan,
                     JewishMonth::AdarII => JewishMonth::Nissan,
                     _ => {
                         let month_num: u8 = temp_month.into();
@@ -921,13 +1012,14 @@ impl JewishCalendarTrait for JewishCalendar {
                 };
             }
 
-            let temp_calendar = JewishCalendar::from_hebrew_date(
+            let temp_calendar = JewishCalendar::from_jewish_date(
                 temp_year,
                 temp_month,
                 temp_day,
                 self.in_israel,
                 self.is_mukaf_choma,
                 self.use_modern_holidays,
+                self.calculator.clone(),
             )?;
             parshah = temp_calendar.get_parshah();
         }
@@ -945,10 +1037,10 @@ impl JewishCalendarTrait for JewishCalendar {
         let is_leap = self.jewish_date.is_jewish_leap_year();
 
         // Shkalim
-        if (month == JewishMonth::Shevat && !is_leap) || (month == JewishMonth::Adar && is_leap) {
-            if day == 25 || day == 27 || day == 29 {
-                return Some(Parsha::Shekalim);
-            }
+        if ((month == JewishMonth::Shevat && !is_leap) || (month == JewishMonth::Adar && is_leap))
+            && (day == 25 || day == 27 || day == 29)
+        {
+            return Some(Parsha::Shekalim);
         }
 
         if (month == JewishMonth::Adar && !is_leap) || month == JewishMonth::AdarII {
@@ -974,25 +1066,25 @@ impl JewishCalendarTrait for JewishCalendar {
                 return Some(Parsha::Hachodesh);
             }
             // Hagadol
-            if day >= 8 && day <= 14 {
+            if (8..=14).contains(&day) {
                 return Some(Parsha::Hagadol);
             }
         }
 
         if month == JewishMonth::Av {
             // Chazon
-            if day >= 4 && day <= 9 {
+            if (4..=9).contains(&day) {
                 return Some(Parsha::Chazon);
             }
             // Nachamu
-            if day >= 10 && day <= 16 {
+            if (10..=16).contains(&day) {
                 return Some(Parsha::Nachamu);
             }
         }
 
         if month == JewishMonth::Tishrei {
             // Shuva
-            if day >= 3 && day <= 8 {
+            if (3..=8).contains(&day) {
                 return Some(Parsha::Shuva);
             }
         }
@@ -1017,23 +1109,20 @@ impl JewishCalendarTrait for JewishCalendar {
         let month = (molad.get_gregorian_month() + 1) as u32; // Convert from 0-based to 1-based
         let day = molad.get_gregorian_day_of_month() as u32;
 
-        let molad_seconds = molad_data.get_chalakim() as f64 * 10.0 / 3.0;
+        let molad_seconds = molad_data.chalakim as f64 * 10.0 / 3.0;
         let seconds = molad_seconds as u32;
         let millis = ((molad_seconds - seconds as f64) * 1000.0) as u32;
 
-        let naive_datetime = chrono::NaiveDate::from_ymd_opt(year as i32, month, day)?
-            .and_hms_milli_opt(
-                molad_data.get_hours() as u32,
-                molad_data.get_minutes() as u32,
-                seconds,
-                millis,
-            )?;
+        let naive_datetime = chrono::NaiveDate::from_ymd_opt(year, month, day)?.and_hms_milli_opt(
+            molad_data.hours as u32,
+            molad_data.minutes as u32,
+            seconds,
+            millis,
+        )?;
 
         // Molad is in Jerusalem standard time (GMT+2)
         let jerusalem_offset = chrono::FixedOffset::east_opt(2 * 3600)?;
-        let datetime_jerusalem = jerusalem_offset
-            .from_local_datetime(&naive_datetime)
-            .single()?;
+        let datetime_jerusalem = jerusalem_offset.from_local_datetime(&naive_datetime).single()?;
 
         // Subtract local mean time offset (20.94 minutes = 1256.4 seconds)
         // Longitude of Har Habayis: 35.2354°
@@ -1073,8 +1162,7 @@ impl JewishCalendarTrait for JewishCalendar {
     // Tekufos and Seasonal Prayers
     fn get_tekufas_tishrei_elapsed_days(&self) -> i64 {
         // Days since Rosh Hashana year 1, plus 1/2 day (0.5)
-        let days = JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year())
-            as f64
+        let days = JewishDate::get_jewish_calendar_elapsed_days(self.jewish_date.get_jewish_year()) as f64
             + (self.jewish_date.get_days_since_start_of_jewish_year() - 1) as f64
             + 0.5;
 
@@ -1087,8 +1175,8 @@ impl JewishCalendarTrait for JewishCalendar {
     fn is_vesein_tal_umatar_start_date(&self) -> bool {
         if self.in_israel {
             // 7th of Cheshvan (can't fall on Shabbos)
-            return self.jewish_date.get_jewish_month() == JewishMonth::Cheshvan
-                && self.jewish_date.get_jewish_day_of_month() == 7;
+            self.jewish_date.get_jewish_month() == JewishMonth::Cheshvan
+                && self.jewish_date.get_jewish_day_of_month() == 7
         } else {
             // Not recited on Friday night
             if self.jewish_date.get_day_of_week() == DayOfWeek::Shabbos {
@@ -1097,9 +1185,9 @@ impl JewishCalendarTrait for JewishCalendar {
             // On Sunday, could be start date or delayed from Shabbos
             if self.jewish_date.get_day_of_week() == DayOfWeek::Sunday {
                 let elapsed = self.get_tekufas_tishrei_elapsed_days();
-                return elapsed == 48 || elapsed == 47;
+                elapsed == 48 || elapsed == 47
             } else {
-                return self.get_tekufas_tishrei_elapsed_days() == 47;
+                self.get_tekufas_tishrei_elapsed_days() == 47
             }
         }
     }
@@ -1107,8 +1195,8 @@ impl JewishCalendarTrait for JewishCalendar {
     fn is_vesein_tal_umatar_starting_tonight(&self) -> bool {
         if self.in_israel {
             // 6th of Cheshvan
-            return self.jewish_date.get_jewish_month() == JewishMonth::Cheshvan
-                && self.jewish_date.get_jewish_day_of_month() == 6;
+            self.jewish_date.get_jewish_month() == JewishMonth::Cheshvan
+                && self.jewish_date.get_jewish_day_of_month() == 6
         } else {
             // Not recited on Friday night
             if self.jewish_date.get_day_of_week() == DayOfWeek::Friday {
@@ -1117,9 +1205,9 @@ impl JewishCalendarTrait for JewishCalendar {
             // On Motzai Shabbos, could be start date or delayed from Friday night
             if self.jewish_date.get_day_of_week() == DayOfWeek::Shabbos {
                 let elapsed = self.get_tekufas_tishrei_elapsed_days();
-                return elapsed == 47 || elapsed == 46;
+                elapsed == 47 || elapsed == 46
             } else {
-                return self.get_tekufas_tishrei_elapsed_days() == 46;
+                self.get_tekufas_tishrei_elapsed_days() == 46
             }
         }
     }
@@ -1151,44 +1239,34 @@ impl JewishCalendarTrait for JewishCalendar {
     }
 
     fn is_mashiv_haruach_start_date(&self) -> bool {
-        self.jewish_date.get_jewish_month() == JewishMonth::Tishrei
-            && self.jewish_date.get_jewish_day_of_month() == 22
+        self.jewish_date.get_jewish_month() == JewishMonth::Tishrei && self.jewish_date.get_jewish_day_of_month() == 22
     }
 
     fn is_mashiv_haruach_end_date(&self) -> bool {
-        self.jewish_date.get_jewish_month() == JewishMonth::Nissan
-            && self.jewish_date.get_jewish_day_of_month() == 15
+        self.jewish_date.get_jewish_month() == JewishMonth::Nissan && self.jewish_date.get_jewish_day_of_month() == 15
     }
 
-    fn is_mashiv_haruach_recited(&self) -> bool {
+    fn is_mashiv_haruach_recited(&self) -> Option<bool> {
         let now_hebrew_date = self.jewish_date.hebrew_date;
-        let start_hebrew_date = JewishDate::from_hebrew_date(
-            now_hebrew_date.era_year().year.into(),
-            JewishMonth::Tishrei,
-            22,
-        )
-        .unwrap()
-        .hebrew_date;
-        let end_hebrew_date = JewishDate::from_hebrew_date(
-            now_hebrew_date.era_year().year.into(),
-            JewishMonth::Nissan,
-            15,
-        )
-        .unwrap()
-        .hebrew_date;
-        return now_hebrew_date > start_hebrew_date && now_hebrew_date < end_hebrew_date;
+        let start_hebrew_date =
+            JewishDate::from_jewish_date(now_hebrew_date.era_year().year, JewishMonth::Tishrei, 22)?.hebrew_date;
+        let end_hebrew_date =
+            JewishDate::from_jewish_date(now_hebrew_date.era_year().year, JewishMonth::Nissan, 15)?.hebrew_date;
+        Some(now_hebrew_date > start_hebrew_date && now_hebrew_date < end_hebrew_date)
     }
 
-    fn is_morid_hatal_recited(&self) -> bool {
-        !self.is_mashiv_haruach_recited()
-            || self.is_mashiv_haruach_start_date()
-            || self.is_mashiv_haruach_end_date()
+    fn is_morid_hatal_recited(&self) -> Option<bool> {
+        Some(
+            !self.is_mashiv_haruach_recited()?
+                || self.is_mashiv_haruach_start_date()
+                || self.is_mashiv_haruach_end_date(),
+        )
     }
 }
 
 const BLATT_PER_YERUSHALMI_TRACTATE: [u64; 39] = [
-    68, 37, 34, 44, 31, 59, 26, 33, 28, 20, 13, 92, 65, 71, 22, 22, 42, 26, 26, 33, 34, 22, 19, 85,
-    72, 47, 40, 47, 54, 48, 44, 37, 34, 44, 9, 57, 37, 19, 13,
+    68, 37, 34, 44, 31, 59, 26, 33, 28, 20, 13, 92, 65, 71, 22, 22, 42, 26, 26, 33, 34, 22, 19, 85, 72, 47, 40, 47, 54,
+    48, 44, 37, 34, 44, 9, 57, 37, 19, 13,
 ];
 
 fn icu_to_naive(date: &Date<Gregorian>) -> Option<DateTime<Utc>> {
@@ -1200,652 +1278,4 @@ fn icu_to_naive(date: &Date<Gregorian>) -> Option<DateTime<Utc>> {
     Some(datetime)
 }
 
-#[cfg(test)]
-mod jni_tests {
-    use super::*;
-    use crate::test_utils::jni::{DEFAULT_TEST_ITERATIONS, create_jewish_calendars, init_jvm};
-    use j4rs::InvocationArg;
-
-    fn bool_tester(fn_to_test: impl Fn(&JewishCalendar) -> bool, method: &str) {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = fn_to_test(&rust_calendar);
-            let java_result = jvm
-                .invoke(&java_calendar, method, InvocationArg::empty())
-                .unwrap();
-            let java_bool: bool = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_bool, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_yom_tov_index_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..100000 {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let rust_disc = match rust_calendar.get_yom_tov_index() {
-                Some(h) => h as i32,
-                None => -1,
-            };
-            let java_result = jvm
-                .invoke(&java_calendar, "getYomTovIndex", InvocationArg::empty())
-                .unwrap();
-            let java_int: i32 = jvm.to_rust(java_result).unwrap();
-            assert_eq!(rust_disc, java_int, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    // Similar for other bool methods
-    #[test]
-    fn test_is_yom_tov_against_java() {
-        bool_tester(JewishCalendar::is_yom_tov, "isYomTov");
-    }
-
-    #[test]
-    fn test_get_day_of_chanukah_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_day_of_chanukah();
-            let java_result = jvm
-                .invoke(&java_calendar, "getDayOfChanukah", InvocationArg::empty())
-                .unwrap();
-            let java_int: i64 = jvm.to_rust(java_result).unwrap();
-            let java_int = if java_int == -1 { None } else { Some(java_int) };
-            assert_eq!(result.map(|r| r as i64), java_int, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_day_of_omer_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_day_of_omer();
-            let java_result = jvm
-                .invoke(&java_calendar, "getDayOfOmer", InvocationArg::empty())
-                .unwrap();
-            let java_int: i64 = jvm.to_rust(java_result).unwrap();
-            let java_int = if java_int == -1 { None } else { Some(java_int) };
-            assert_eq!(result.map(|r| r as i64), java_int, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_in_israel_against_java() {
-        bool_tester(JewishCalendar::get_in_israel, "getInIsrael");
-    }
-
-    #[test]
-    fn test_get_is_mukaf_choma_against_java() {
-        bool_tester(JewishCalendar::get_is_mukaf_choma, "getIsMukafChoma");
-    }
-
-    #[test]
-    fn test_get_is_use_modern_holidays_against_java() {
-        bool_tester(
-            JewishCalendar::get_is_use_modern_holidays,
-            "isUseModernHolidays",
-        );
-    }
-
-    #[test]
-    fn test_is_yom_tov_assur_bemelacha_against_java() {
-        bool_tester(
-            JewishCalendar::is_yom_tov_assur_bemelacha,
-            "isYomTovAssurBemelacha",
-        );
-    }
-
-    #[test]
-    fn test_is_assur_bemelacha_against_java() {
-        bool_tester(JewishCalendar::is_assur_bemelacha, "isAssurBemelacha");
-    }
-
-    #[test]
-    fn test_has_candle_lighting_against_java() {
-        bool_tester(JewishCalendar::has_candle_lighting, "hasCandleLighting");
-    }
-
-    #[test]
-    fn test_is_tomorrow_shabbos_or_yom_tov_against_java() {
-        bool_tester(
-            JewishCalendar::is_tomorrow_shabbos_or_yom_tov,
-            "isTomorrowShabbosOrYomTov",
-        );
-    }
-
-    #[test]
-    fn test_is_erev_yom_tov_sheni_against_java() {
-        bool_tester(JewishCalendar::is_erev_yom_tov_sheni, "isErevYomTovSheni");
-    }
-
-    #[test]
-    fn test_is_aseres_yemei_teshuva_against_java() {
-        bool_tester(
-            JewishCalendar::is_aseres_yemei_teshuva,
-            "isAseresYemeiTeshuva",
-        );
-    }
-
-    #[test]
-    fn test_is_pesach_against_java() {
-        bool_tester(JewishCalendar::is_pesach, "isPesach");
-    }
-
-    #[test]
-    fn test_is_chol_hamoed_pesach_against_java() {
-        bool_tester(JewishCalendar::is_chol_hamoed_pesach, "isCholHamoedPesach");
-    }
-
-    #[test]
-    fn test_is_shavuos_against_java() {
-        bool_tester(JewishCalendar::is_shavuos, "isShavuos");
-    }
-
-    #[test]
-    fn test_is_rosh_hashana_against_java() {
-        bool_tester(JewishCalendar::is_rosh_hashana, "isRoshHashana");
-    }
-
-    #[test]
-    fn test_is_yom_kippur_against_java() {
-        bool_tester(JewishCalendar::is_yom_kippur, "isYomKippur");
-    }
-
-    #[test]
-    fn test_is_succos_against_java() {
-        bool_tester(JewishCalendar::is_succos, "isSuccos");
-    }
-
-    #[test]
-    fn test_is_hoshana_rabba_against_java() {
-        bool_tester(JewishCalendar::is_hoshana_rabba, "isHoshanaRabba");
-    }
-
-    #[test]
-    fn test_is_shemini_atzeres_against_java() {
-        bool_tester(JewishCalendar::is_shemini_atzeres, "isShminiAtzeres");
-    }
-
-    #[test]
-    fn test_is_simchas_torah_against_java() {
-        bool_tester(JewishCalendar::is_simchas_torah, "isSimchasTorah");
-    }
-
-    #[test]
-    fn test_is_chol_hamoed_succos_against_java() {
-        bool_tester(JewishCalendar::is_chol_hamoed_succos, "isCholHamoedSuccos");
-    }
-
-    #[test]
-    fn test_is_chol_hamoed_against_java() {
-        bool_tester(JewishCalendar::is_chol_hamoed, "isCholHamoed");
-    }
-
-    #[test]
-    fn test_is_erev_yom_tov_against_java() {
-        bool_tester(JewishCalendar::is_erev_yom_tov, "isErevYomTov");
-    }
-
-    #[test]
-    fn test_is_rosh_chodesh_against_java() {
-        bool_tester(JewishCalendar::is_rosh_chodesh, "isRoshChodesh");
-    }
-
-    #[test]
-    fn test_is_isru_chag_against_java() {
-        bool_tester(JewishCalendar::is_isru_chag, "isIsruChag");
-    }
-
-    #[test]
-    fn test_is_taanis_against_java() {
-        bool_tester(JewishCalendar::is_taanis, "isTaanis");
-    }
-
-    #[test]
-    fn test_is_taanis_bechoros_against_java() {
-        bool_tester(JewishCalendar::is_taanis_bechoros, "isTaanisBechoros");
-    }
-
-    #[test]
-    fn test_is_chanukah_against_java() {
-        bool_tester(JewishCalendar::is_chanukah, "isChanukah");
-    }
-
-    #[test]
-    fn test_is_purim_against_java() {
-        bool_tester(JewishCalendar::is_purim, "isPurim");
-    }
-
-    #[test]
-    fn test_is_tisha_beav_against_java() {
-        bool_tester(JewishCalendar::is_tisha_beav, "isTishaBav");
-    }
-
-    #[test]
-    fn test_is_birkas_hachamah_against_java() {
-        bool_tester(JewishCalendar::is_birkas_hachamah, "isBirkasHachamah");
-    }
-
-    #[test]
-    fn test_is_erev_rosh_chodesh_against_java() {
-        bool_tester(JewishCalendar::is_erev_rosh_chodesh, "isErevRoshChodesh");
-    }
-
-    #[test]
-    fn test_is_yom_kippur_katan_against_java() {
-        bool_tester(JewishCalendar::is_yom_kippur_katan, "isYomKippurKatan");
-    }
-
-    #[test]
-    fn test_is_behab_against_java() {
-        bool_tester(JewishCalendar::is_be_hab, "isBeHaB");
-    }
-
-    #[test]
-    fn test_is_machar_chodesh_against_java() {
-        bool_tester(JewishCalendar::is_machar_chodesh, "isMacharChodesh");
-    }
-
-    #[test]
-    fn test_is_shabbos_mevorchim_against_java() {
-        bool_tester(JewishCalendar::is_shabbos_mevorchim, "isShabbosMevorchim");
-    }
-
-    #[test]
-    fn test_get_upcoming_parshah_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_upcoming_parshah().map(|p| p as i32);
-
-            let java_result = jvm
-                .invoke(&java_calendar, "getUpcomingParshah", InvocationArg::empty())
-                .unwrap();
-
-            // Convert Java Parsha enum to ordinal
-            let java_ordinal: i32 = jvm
-                .invoke(&java_result, "ordinal", InvocationArg::empty())
-                .and_then(|r| jvm.to_rust(r))
-                .unwrap();
-            let java_ordinal = if java_ordinal == 0 {
-                None
-            } else {
-                Some(java_ordinal - 1)
-            };
-            assert_eq!(result, java_ordinal, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_special_shabbos_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_special_shabbos().map(|p| p as i32);
-            let java_result = jvm
-                .invoke(&java_calendar, "getSpecialShabbos", InvocationArg::empty())
-                .unwrap();
-
-            // Convert Java Parsha enum to ordinal
-            let java_ordinal: i32 = jvm
-                .invoke(&java_result, "ordinal", InvocationArg::empty())
-                .and_then(|r| jvm.to_rust(r))
-                .unwrap();
-            let java_ordinal = if java_ordinal == 0 {
-                None
-            } else {
-                Some(java_ordinal - 1)
-            };
-            assert_eq!(result, java_ordinal, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_tekufas_tishrei_elapsed_days_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-            let result = rust_calendar.get_tekufas_tishrei_elapsed_days();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "getTekufasTishreiElapsedDays",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-            let java_int: i64 = jvm.to_rust(java_result).unwrap();
-            assert_eq!(result, java_int, "{}", message);
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_is_vesein_tal_umatar_start_date_against_java() {
-        bool_tester(
-            JewishCalendar::is_vesein_tal_umatar_start_date,
-            "isVeseinTalUmatarStartDate",
-        );
-    }
-
-    #[test]
-    fn test_is_vesein_tal_umatar_starting_tonight_against_java() {
-        bool_tester(
-            JewishCalendar::is_vesein_tal_umatar_starting_tonight,
-            "isVeseinTalUmatarStartingTonight",
-        );
-    }
-
-    #[test]
-    fn test_is_vesein_tal_umatar_recited_against_java() {
-        bool_tester(
-            JewishCalendar::is_vesein_tal_umatar_recited,
-            "isVeseinTalUmatarRecited",
-        );
-    }
-
-    #[test]
-    fn test_is_vesein_beracha_recited_against_java() {
-        bool_tester(
-            JewishCalendar::is_vesein_beracha_recited,
-            "isVeseinBerachaRecited",
-        );
-    }
-
-    #[test]
-    fn test_is_mashiv_haruach_start_date_against_java() {
-        bool_tester(
-            JewishCalendar::is_mashiv_haruach_start_date,
-            "isMashivHaruachStartDate",
-        );
-    }
-
-    #[test]
-    fn test_is_mashiv_haruach_end_date_against_java() {
-        bool_tester(
-            JewishCalendar::is_mashiv_haruach_end_date,
-            "isMashivHaruachEndDate",
-        );
-    }
-
-    #[test]
-    fn test_is_mashiv_haruach_recited_against_java() {
-        bool_tester(
-            JewishCalendar::is_mashiv_haruach_recited,
-            "isMashivHaruachRecited",
-        );
-    }
-
-    #[test]
-    fn test_is_morid_hatal_recited_against_java() {
-        bool_tester(
-            JewishCalendar::is_morid_hatal_recited,
-            "isMoridHatalRecited",
-        );
-    }
-
-    #[test]
-    fn test_get_molad_as_date_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-
-            let rust_result = rust_calendar.get_molad_as_date();
-            let java_result = jvm
-                .invoke(&java_calendar, "getMoladAsDate", InvocationArg::empty())
-                .unwrap();
-
-            if rust_result.is_none() {
-                continue; // Skip if Rust couldn't calculate
-            }
-
-            let rust_datetime = rust_result.unwrap();
-
-            // Get time in milliseconds from Java Date
-            let java_time_millis = jvm
-                .invoke(&java_result, "getTime", InvocationArg::empty())
-                .unwrap();
-            let java_millis: i64 = jvm.to_rust(java_time_millis).unwrap();
-
-            let rust_millis = rust_datetime.timestamp_millis();
-
-            // Allow 1 second tolerance for rounding differences
-            let diff = (rust_millis - java_millis).abs();
-            assert!(
-                diff < 1000,
-                "{}: Time difference too large: {} ms",
-                message,
-                diff
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_tchilaszman_kidush_levana_3_days_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-
-            let rust_result = rust_calendar.get_tchilaszman_kidush_levana_3_days();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "getTchilasZmanKidushLevana3Days",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-
-            if rust_result.is_none() {
-                continue;
-            }
-
-            let rust_datetime = rust_result.unwrap();
-            let java_time_millis = jvm
-                .invoke(&java_result, "getTime", InvocationArg::empty())
-                .unwrap();
-            let java_millis: i64 = jvm.to_rust(java_time_millis).unwrap();
-            let rust_millis = rust_datetime.timestamp_millis();
-
-            let diff = (rust_millis - java_millis).abs();
-            assert!(
-                diff < 1000,
-                "{}: Time difference too large: {} ms",
-                message,
-                diff
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_tchilaszman_kidush_levana_7_days_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-
-            let rust_result = rust_calendar.get_tchilaszman_kidush_levana_7_days();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "getTchilasZmanKidushLevana7Days",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-
-            if rust_result.is_none() {
-                continue;
-            }
-
-            let rust_datetime = rust_result.unwrap();
-            let java_time_millis = jvm
-                .invoke(&java_result, "getTime", InvocationArg::empty())
-                .unwrap();
-            let java_millis: i64 = jvm.to_rust(java_time_millis).unwrap();
-            let rust_millis = rust_datetime.timestamp_millis();
-
-            let diff = (rust_millis - java_millis).abs();
-            assert!(
-                diff < 1000,
-                "{}: Time difference too large: {} ms",
-                message,
-                diff
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_kidush_levana_between_moldos_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-
-            let rust_result = rust_calendar.get_sof_zman_kidush_levana_between_moldos();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "getSofZmanKidushLevanaBetweenMoldos",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-
-            if rust_result.is_none() {
-                continue;
-            }
-
-            let rust_datetime = rust_result.unwrap();
-            let java_time_millis = jvm
-                .invoke(&java_result, "getTime", InvocationArg::empty())
-                .unwrap();
-            let java_millis: i64 = jvm.to_rust(java_time_millis).unwrap();
-            let rust_millis = rust_datetime.timestamp_millis();
-
-            let diff = (rust_millis - java_millis).abs();
-            assert!(
-                diff < 1000,
-                "{}: Time difference too large: {} ms",
-                message,
-                diff
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_kidush_levana_15_days_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_jewish_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar, message) = test_case.unwrap();
-
-            let rust_result = rust_calendar.get_sof_zman_kidush_levana_15_days();
-            let java_result = jvm
-                .invoke(
-                    &java_calendar,
-                    "getSofZmanKidushLevana15Days",
-                    InvocationArg::empty(),
-                )
-                .unwrap();
-
-            if rust_result.is_none() {
-                continue;
-            }
-
-            let rust_datetime = rust_result.unwrap();
-            let java_time_millis = jvm
-                .invoke(&java_result, "getTime", InvocationArg::empty())
-                .unwrap();
-            let java_millis: i64 = jvm.to_rust(java_time_millis).unwrap();
-            let rust_millis = rust_datetime.timestamp_millis();
-
-            let diff = (rust_millis - java_millis).abs();
-            assert!(
-                diff < 1000,
-                "{}: Time difference too large: {} ms",
-                message,
-                diff
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-}
+impl<N: AstronomicalCalculatorTrait> DefmtFormatTrait for JewishCalendar<N> {}

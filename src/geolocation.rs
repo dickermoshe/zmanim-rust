@@ -1,10 +1,13 @@
-use crate::constants::{_Formula, _MINUTE_MILLIS};
+use crate::{
+    constants::{_Formula, _MINUTE_MILLIS},
+    defmt::DefmtFormatTrait,
+};
 use chrono::{DateTime, Duration, Offset, TimeZone};
 use core::f64::consts::PI;
 #[cfg(feature = "no_std")]
 use core_maths::CoreFloat;
 
-pub trait GeoLocationTrait {
+pub trait GeoLocationTrait: DefmtFormatTrait {
     fn get_latitude(&self) -> f64;
     fn get_longitude(&self) -> f64;
     fn get_elevation(&self) -> f64;
@@ -214,3 +217,4 @@ impl GeoLocationTrait for GeoLocation {
         0
     }
 }
+impl DefmtFormatTrait for GeoLocation {}

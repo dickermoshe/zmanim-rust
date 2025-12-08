@@ -1,6 +1,6 @@
 use crate::constants::Parsha;
-
-pub const PARSHA_LIST_0: [Option<Parsha>; 51] = [
+pub(crate) type ParshaList = [Option<Parsha>; 56];
+pub(crate) static PARSHA_LIST_0: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -52,8 +52,13 @@ pub const PARSHA_LIST_0: [Option<Parsha>; 51] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
+    None,
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_1: [Option<Parsha>; 51] = [
+pub static PARSHA_LIST_1: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -105,8 +110,13 @@ pub const PARSHA_LIST_1: [Option<Parsha>; 51] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
+    None,
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_2: [Option<Parsha>; 52] = [
+pub static PARSHA_LIST_2: ParshaList = [
     None,
     Some(Parsha::HaAzinu),
     None,
@@ -159,8 +169,12 @@ pub const PARSHA_LIST_2: [Option<Parsha>; 52] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_3: [Option<Parsha>; 52] = [
+pub static PARSHA_LIST_3: ParshaList = [
     None,
     Some(Parsha::HaAzinu),
     None,
@@ -213,8 +227,12 @@ pub const PARSHA_LIST_3: [Option<Parsha>; 52] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_4: [Option<Parsha>; 52] = [
+pub static PARSHA_LIST_4: ParshaList = [
     None,
     None,
     Some(Parsha::HaAzinu),
@@ -267,8 +285,12 @@ pub const PARSHA_LIST_4: [Option<Parsha>; 52] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_5: [Option<Parsha>; 52] = [
+pub static PARSHA_LIST_5: ParshaList = [
     None,
     None,
     Some(Parsha::HaAzinu),
@@ -321,8 +343,12 @@ pub const PARSHA_LIST_5: [Option<Parsha>; 52] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_6: [Option<Parsha>; 55] = [
+pub static PARSHA_LIST_6: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -378,8 +404,9 @@ pub const PARSHA_LIST_6: [Option<Parsha>; 55] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
+    None,
 ];
-pub const PARSHA_LIST_7: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_7: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -437,7 +464,7 @@ pub const PARSHA_LIST_7: [Option<Parsha>; 56] = [
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
 ];
-pub const PARSHA_LIST_8: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_8: ParshaList = [
     None,
     Some(Parsha::HaAzinu),
     None,
@@ -495,7 +522,7 @@ pub const PARSHA_LIST_8: [Option<Parsha>; 56] = [
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
 ];
-pub const PARSHA_LIST_9: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_9: ParshaList = [
     None,
     Some(Parsha::HaAzinu),
     None,
@@ -553,7 +580,7 @@ pub const PARSHA_LIST_9: [Option<Parsha>; 56] = [
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
 ];
-pub const PARSHA_LIST_10: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_10: ParshaList = [
     None,
     None,
     Some(Parsha::HaAzinu),
@@ -611,7 +638,7 @@ pub const PARSHA_LIST_10: [Option<Parsha>; 56] = [
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
 ];
-pub const PARSHA_LIST_11: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_11: ParshaList = [
     None,
     None,
     Some(Parsha::HaAzinu),
@@ -669,7 +696,7 @@ pub const PARSHA_LIST_11: [Option<Parsha>; 56] = [
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
 ];
-pub const PARSHA_LIST_12: [Option<Parsha>; 51] = [
+pub static PARSHA_LIST_12: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -721,8 +748,13 @@ pub const PARSHA_LIST_12: [Option<Parsha>; 51] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
+    None,
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_13: [Option<Parsha>; 52] = [
+pub static PARSHA_LIST_13: ParshaList = [
     None,
     Some(Parsha::HaAzinu),
     None,
@@ -775,8 +807,12 @@ pub const PARSHA_LIST_13: [Option<Parsha>; 52] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
+    None,
+    None,
+    None,
+    None,
 ];
-pub const PARSHA_LIST_14: [Option<Parsha>; 55] = [
+pub static PARSHA_LIST_14: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -832,8 +868,9 @@ pub const PARSHA_LIST_14: [Option<Parsha>; 55] = [
     Some(Parsha::KiSeitzei),
     Some(Parsha::KiSavo),
     Some(Parsha::NitzavimVayeilech),
+    None,
 ];
-pub const PARSHA_LIST_15: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_15: ParshaList = [
     None,
     Some(Parsha::Vayeilech),
     Some(Parsha::HaAzinu),
@@ -891,7 +928,7 @@ pub const PARSHA_LIST_15: [Option<Parsha>; 56] = [
     Some(Parsha::KiSavo),
     Some(Parsha::Nitzavim),
 ];
-pub const PARSHA_LIST_16: [Option<Parsha>; 56] = [
+pub static PARSHA_LIST_16: ParshaList = [
     None,
     None,
     Some(Parsha::HaAzinu),

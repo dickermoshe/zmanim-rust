@@ -1,4 +1,5 @@
 use crate::{
+    defmt::DefmtFormatTrait,
     geolocation::{GeoLocation, GeoLocationTrait},
     tests::test_utils::{RandomValue, dt_to_java_calendar, random_random_value, tz_to_java_timezone},
 };
@@ -13,15 +14,15 @@ pub struct JavaGeoLocation<'a> {
     pub timezone: Tz,
 }
 
+impl<'a> DefmtFormatTrait for JavaGeoLocation<'a> {}
+
 impl<'a> JavaGeoLocation<'a> {
     pub fn new(jvm: &'a Jvm, latitude: f64, longitude: f64, elevation: f64, timezone: Tz) -> Option<Self> {
         let java_timezone = tz_to_java_timezone(jvm, timezone);
 
         // DIFF: Java will return a GMT timezone if it is unable to find a timezone
         // However we will return None if this is the case
-        if java_timezone.is_none() {
-            return None;
-        }
+        java_timezone.as_ref()?;
         let java_timezone = java_timezone.unwrap();
         let instance = jvm
             .create_instance(
@@ -37,9 +38,7 @@ impl<'a> JavaGeoLocation<'a> {
             .ok();
         // DIFF: Java will throw an exception if it is unable to create a GeoLocation
         // However we will return None if this is the case
-        if instance.is_none() {
-            return None;
-        }
+        instance.as_ref()?;
         let instance = instance.unwrap();
         Some(Self {
             jvm,
@@ -258,90 +257,90 @@ mod jni_tests {
         let mut rng = rand::thread_rng();
         let mut ran_once = false;
         for _ in 0..DEFAULT_TEST_ITERATIONS {
-            if let Some((geo_location, java_geo_location)) = random_geolocations(&jvm, &mut rng) {
-                if let Some((other_geo_location, other_java_geo_location)) = random_geolocations(&jvm, &mut rng) {
-                    let date = random_date_time(&mut rng, other_java_geo_location.timezone);
+            if let Some((geo_location, java_geo_location)) = random_geolocations(&jvm, &mut rng)
+                && let Some((other_geo_location, other_java_geo_location)) = random_geolocations(&jvm, &mut rng)
+            {
+                let date = random_date_time(&mut rng, other_java_geo_location.timezone);
 
-                    // Test All Methods
-                    assert_almost_equal_f64(
-                        geo_location.get_latitude(),
-                        java_geo_location.get_latitude(),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!("getLatitude of {:?}", geo_location),
-                    );
-                    assert_almost_equal_f64(
-                        geo_location.get_longitude(),
-                        java_geo_location.get_longitude(),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!("getLongitude of {:?}", geo_location),
-                    );
-                    assert_almost_equal_f64(
-                        geo_location.get_elevation(),
-                        java_geo_location.get_elevation(),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!("getElevation of {:?}", geo_location),
-                    );
-                    assert_almost_equal_f64(
-                        geo_location.get_rhumb_line_distance(&other_geo_location),
-                        java_geo_location.get_rhumb_line_distance(&other_java_geo_location),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!(
-                            "getRhumbLineDistance of {:?} against {:?}",
-                            geo_location, other_geo_location
-                        ),
-                    );
-                    assert_almost_equal_f64(
-                        geo_location.get_rhumb_line_bearing(&other_geo_location),
-                        java_geo_location.get_rhumb_line_bearing(&other_java_geo_location),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!(
-                            "getRhumbLineBearing of {:?} against {:?}",
-                            geo_location, other_geo_location
-                        ),
-                    );
-                    assert_almost_equal_f64_option(
-                        &geo_location.get_geodesic_initial_bearing(&other_geo_location),
-                        &java_geo_location.get_geodesic_initial_bearing(&other_java_geo_location),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!(
-                            "getGeodesicInitialBearing of {:?} against {:?}",
-                            geo_location, other_geo_location
-                        ),
-                    );
-                    assert_almost_equal_f64_option(
-                        &geo_location.get_geodesic_final_bearing(&other_geo_location),
-                        &java_geo_location.get_geodesic_final_bearing(&other_java_geo_location),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!(
-                            "getGeodesicFinalBearing of {:?} against {:?}",
-                            geo_location, other_geo_location
-                        ),
-                    );
-                    assert_almost_equal_f64_option(
-                        &geo_location.get_geodesic_distance(&other_geo_location),
-                        &java_geo_location.get_geodesic_distance(&other_java_geo_location),
-                        DEFAULT_F64_TEST_EPSILON,
-                        &format!(
-                            "getGeodesicDistance of {:?} against {:?}",
-                            geo_location, other_geo_location
-                        ),
-                    );
-                    assert_almost_equal_duration(
-                        &geo_location.get_local_mean_time_offset(&date),
-                        &java_geo_location.get_local_mean_time_offset(&date),
-                        10, // 10 milliseconds
-                        &format!("getLocalMeanTimeOffset of {:?} against {:?}", geo_location, date),
-                    );
+                // Test All Methods
+                assert_almost_equal_f64(
+                    geo_location.get_latitude(),
+                    java_geo_location.get_latitude(),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!("getLatitude of {:?}", geo_location),
+                );
+                assert_almost_equal_f64(
+                    geo_location.get_longitude(),
+                    java_geo_location.get_longitude(),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!("getLongitude of {:?}", geo_location),
+                );
+                assert_almost_equal_f64(
+                    geo_location.get_elevation(),
+                    java_geo_location.get_elevation(),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!("getElevation of {:?}", geo_location),
+                );
+                assert_almost_equal_f64(
+                    geo_location.get_rhumb_line_distance(&other_geo_location),
+                    java_geo_location.get_rhumb_line_distance(&other_java_geo_location),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!(
+                        "getRhumbLineDistance of {:?} against {:?}",
+                        geo_location, other_geo_location
+                    ),
+                );
+                assert_almost_equal_f64(
+                    geo_location.get_rhumb_line_bearing(&other_geo_location),
+                    java_geo_location.get_rhumb_line_bearing(&other_java_geo_location),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!(
+                        "getRhumbLineBearing of {:?} against {:?}",
+                        geo_location, other_geo_location
+                    ),
+                );
+                assert_almost_equal_f64_option(
+                    &geo_location.get_geodesic_initial_bearing(&other_geo_location),
+                    &java_geo_location.get_geodesic_initial_bearing(&other_java_geo_location),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!(
+                        "getGeodesicInitialBearing of {:?} against {:?}",
+                        geo_location, other_geo_location
+                    ),
+                );
+                assert_almost_equal_f64_option(
+                    &geo_location.get_geodesic_final_bearing(&other_geo_location),
+                    &java_geo_location.get_geodesic_final_bearing(&other_java_geo_location),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!(
+                        "getGeodesicFinalBearing of {:?} against {:?}",
+                        geo_location, other_geo_location
+                    ),
+                );
+                assert_almost_equal_f64_option(
+                    &geo_location.get_geodesic_distance(&other_geo_location),
+                    &java_geo_location.get_geodesic_distance(&other_java_geo_location),
+                    DEFAULT_F64_TEST_EPSILON,
+                    &format!(
+                        "getGeodesicDistance of {:?} against {:?}",
+                        geo_location, other_geo_location
+                    ),
+                );
+                assert_almost_equal_duration(
+                    &geo_location.get_local_mean_time_offset(&date),
+                    &java_geo_location.get_local_mean_time_offset(&date),
+                    10, // 10 milliseconds
+                    &format!("getLocalMeanTimeOffset of {:?} against {:?}", geo_location, date),
+                );
 
-                    assert_eq!(
-                        geo_location.get_antimeridian_adjustment(&date),
-                        java_geo_location.get_antimeridian_adjustment(&date),
-                        "getAntimeridianAdjustment of {:?} against {:?}",
-                        geo_location,
-                        date
-                    );
-                    ran_once = true;
-                }
+                assert_eq!(
+                    geo_location.get_antimeridian_adjustment(&date),
+                    java_geo_location.get_antimeridian_adjustment(&date),
+                    "getAntimeridianAdjustment of {:?} against {:?}",
+                    geo_location,
+                    date
+                );
+                ran_once = true;
             }
         }
         assert!(ran_once, "No test cases were run");

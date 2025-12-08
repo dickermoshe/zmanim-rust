@@ -7,14 +7,6 @@ use rand::{Rng, distributions::WeightedIndex, prelude::Distribution};
 
 use crate::{constants::JewishMonth, geolocation::GeoLocationTrait, tests::geolocation_test::JavaGeoLocation};
 
-// use crate::{
-//     astronomical_calendar::AstronomicalCalendar,
-//     constants::{JewishDateTrait, JewishMonth},
-//     geolocation::GeoLocation,
-//     jewish_calendar::JewishCalendar,
-//     jewish_date::JewishDate,
-//     zmanim_calendar::ZmanimCalendar,
-// };
 pub static DEFAULT_TEST_ITERATIONS: i32 = 10000;
 pub static DEFAULT_F64_TEST_EPSILON: f64 = 0.02;
 // We allow Rust to return None when java returns Some.
@@ -52,8 +44,7 @@ pub fn random_date_time(rng: &mut impl Rng, tz: Tz) -> DateTime<chrono_tz::Tz> {
     let milliseconds_since_epoch: i64 = rng.gen_range(
         -years_in_milliseconds..=years_in_milliseconds * 100, // 1870 to 2070
     );
-    let dt = tz.timestamp_millis_opt(milliseconds_since_epoch).unwrap();
-    dt
+    tz.timestamp_millis_opt(milliseconds_since_epoch).unwrap()
 }
 
 /// Converts a generic TimeZone to chrono_tz::Tz.
@@ -69,9 +60,10 @@ pub fn tz_to_chrono_tz<Tz: chrono::TimeZone>(timezone: Tz) -> chrono_tz::Tz {
     // that all timezones are chrono_tz::Tz before calling this function.
     unsafe { std::mem::transmute_copy::<Tz, chrono_tz::Tz>(&timezone) }
 }
+
 pub fn random_zenith(rng: &mut impl Rng) -> f64 {
     let random_value = random_random_value(rng);
-    let zenith = match random_value {
+    match random_value {
         RandomValue::Normal => rng.gen_range(-180.0..=180.0),
         RandomValue::OutOfRange => {
             if rng.gen_bool(0.5) {
@@ -82,14 +74,12 @@ pub fn random_zenith(rng: &mut impl Rng) -> f64 {
         }
         RandomValue::Infinite => f64::INFINITY,
         RandomValue::Nan => f64::NAN,
-    };
-    zenith
+    }
 }
 
 pub fn tz_to_java_timezone<Tz: chrono::TimeZone>(jvm: &Jvm, timezone: Tz) -> Option<Instance> {
     // unsafe cast to chrono_tz::Tz - assumes Tz is chrono_tz::Tz
     let timezone = tz_to_chrono_tz(timezone);
-    let timezone = timezone.clone();
     let timezone_id = timezone.name();
     let tz = jvm
         .invoke_static(
@@ -145,14 +135,14 @@ pub fn geolocation_to_java_geolocation<Tz: chrono::TimeZone>(
     geolocation: &impl GeoLocationTrait,
     timezone: Tz,
 ) -> Option<Instance> {
-    return JavaGeoLocation::new(
+    JavaGeoLocation::new(
         jvm,
         geolocation.get_latitude(),
         geolocation.get_longitude(),
         geolocation.get_elevation(),
         tz_to_chrono_tz(timezone),
     )
-    .map(|java_geo_location| java_geo_location.instance);
+    .map(|java_geo_location| java_geo_location.instance)
 }
 
 // pub fn create_java_timezone(jvm: &Jvm, timezone_id: &str) -> Option<Instance> {

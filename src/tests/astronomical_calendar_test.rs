@@ -5,6 +5,7 @@ use crate::{
     astronomical_calculator::NOAACalculator,
     astronomical_calendar::AstronomicalCalendarTrait,
     constants::_SolarEvent,
+    defmt::DefmtFormatTrait,
     geolocation::GeoLocation,
     tests::test_utils::{dt_to_java_calendar, dt_to_java_date, geolocation_to_java_geolocation},
 };
@@ -14,6 +15,8 @@ pub struct JavaAstronomicalCalendar<'a, Tz: TimeZone> {
     pub instance: Instance,
     pub date_time: DateTime<Tz>,
 }
+
+impl<'a, Tz: TimeZone> DefmtFormatTrait for JavaAstronomicalCalendar<'a, Tz> {}
 
 impl<'a, Tz: TimeZone> JavaAstronomicalCalendar<'a, Tz> {
     pub fn new(jvm: &'a Jvm, date_time: DateTime<Tz>, geo_location: GeoLocation) -> Self {
@@ -35,7 +38,7 @@ impl<'a, Tz: TimeZone> JavaAstronomicalCalendar<'a, Tz> {
         Self {
             jvm,
             instance: java_astronomical_calendar,
-            date_time: date_time,
+            date_time,
         }
     }
 
@@ -64,7 +67,7 @@ impl<'a, Tz: TimeZone> AstronomicalCalendarTrait<Tz, GeoLocation, NOAACalculator
         todo!()
     }
     // These methods are not used in the tests, but we need to implement them for the trait.
-    fn get_noaa_calculator(&self) -> &NOAACalculator {
+    fn get_calculator(&self) -> &NOAACalculator {
         todo!()
     }
     // These methods are not used in the tests, but we need to implement them for the trait.
@@ -352,7 +355,7 @@ mod jni_tests {
     fn create_astronomical_calendars<'a>(
         jvm: &'a Jvm,
     ) -> Option<(
-        AstronomicalCalendar<chrono_tz::Tz>,
+        AstronomicalCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>,
         JavaAstronomicalCalendar<'a, chrono_tz::Tz>,
     )> {
         let mut rng = rand::thread_rng();
@@ -360,7 +363,7 @@ mod jni_tests {
 
         let date_time = random_date_time(&mut rng, java_geo_location.timezone);
 
-        let rust_calendar = AstronomicalCalendar::new(date_time, geo_location.clone());
+        let rust_calendar = AstronomicalCalendar::new(date_time, geo_location.clone(), NOAACalculator);
         let java_calendar = JavaAstronomicalCalendar::new(jvm, date_time, geo_location);
 
         Some((rust_calendar, java_calendar))
@@ -377,7 +380,9 @@ mod jni_tests {
 
     // A helper function to test a function that returns a DateTime and takes no arguments
     fn date_time_tester(
-        fn_to_test: impl Fn(&AstronomicalCalendar<chrono_tz::Tz>) -> Option<DateTime<chrono_tz::Tz>>,
+        fn_to_test: impl Fn(
+            &AstronomicalCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>,
+        ) -> Option<DateTime<chrono_tz::Tz>>,
         method: &str,
     ) {
         let jvm = init_jvm();
@@ -408,7 +413,10 @@ mod jni_tests {
 
     // A helper function to test a function that returns a DateTime and takes a zenith as an argument
     fn i64_with_zenith_tester(
-        fn_to_test: impl Fn(&AstronomicalCalendar<chrono_tz::Tz>, f64) -> Option<DateTime<chrono_tz::Tz>>,
+        fn_to_test: impl Fn(
+            &AstronomicalCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>,
+            f64,
+        ) -> Option<DateTime<chrono_tz::Tz>>,
         method: &str,
     ) {
         let jvm = init_jvm();
@@ -445,7 +453,7 @@ mod jni_tests {
 
     // A helper function to test a function that returns a f64 and takes a zenith as an argument
     fn f64_with_zenith_tester(
-        fn_to_test: impl Fn(&AstronomicalCalendar<chrono_tz::Tz>, f64) -> Option<f64>,
+        fn_to_test: impl Fn(&AstronomicalCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>, f64) -> Option<f64>,
         method: &str,
     ) {
         let jvm = init_jvm();
@@ -470,8 +478,8 @@ mod jni_tests {
                 )
                 .ok()
                 .and_then(|instance| jvm.to_rust::<f64>(instance).ok())
-                .map(|result| if result.is_nan() { None } else { Some(result) })
-                .flatten();
+                .and_then(|result| if result.is_nan() { None } else { Some(result) });
+
             assert_almost_equal_f64_option(
                 &result,
                 &java_result,

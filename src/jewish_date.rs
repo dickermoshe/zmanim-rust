@@ -1,3 +1,5 @@
+#[cfg(feature = "defmt")]
+use icu_calendar::types::{CyclicYear, YearInfo};
 use icu_calendar::{
     Date, Gregorian,
     cal::Hebrew,
@@ -5,12 +7,11 @@ use icu_calendar::{
     types::{DateDuration, MonthCode, Weekday},
 };
 
-use crate::constants::*;
+use crate::{constants::*, defmt::DefmtFormatTrait};
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq)]
 pub struct JewishDate {
-    pub hebrew_date: Date<Hebrew>,
+    pub(crate) hebrew_date: Date<Hebrew>,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -21,7 +22,12 @@ pub struct MoladData {
     pub chalakim: i64,
 }
 
-pub trait JewishDateTrait: Sized {
+pub(crate) trait InternalJewishDateTrait {
+    fn get_gregorian_date(&self) -> Date<Gregorian>;
+}
+
+#[allow(private_bounds)]
+pub trait JewishDateTrait: Sized + InternalJewishDateTrait + DefmtFormatTrait {
     fn get_jewish_year(&self) -> i32;
 
     fn get_jewish_month(&self) -> JewishMonth;
@@ -57,6 +63,12 @@ pub trait JewishDateTrait: Sized {
     fn get_molad(&self) -> Option<MoladData>;
 }
 
+impl InternalJewishDateTrait for JewishDate {
+    fn get_gregorian_date(&self) -> Date<Gregorian> {
+        self.get_hebrew_date().to_calendar(Gregorian)
+    }
+}
+
 impl JewishDateTrait for JewishDate {
     fn get_jewish_month(&self) -> JewishMonth {
         let month_code = self.get_hebrew_date().month().formatting_code.0;
@@ -75,9 +87,7 @@ impl JewishDateTrait for JewishDate {
             "M10" => JewishMonth::Tammuz,
             "M11" => JewishMonth::Av,
             "M12" => JewishMonth::Elul,
-            _ => {
-                panic!("Unknown Hebrew month code: {}", month_code);
-            }
+            _ => unreachable!(),
         }
     }
 
@@ -86,7 +96,7 @@ impl JewishDateTrait for JewishDate {
     }
 
     fn get_gregorian_year(&self) -> i32 {
-        self.get_gregorian_date().era_year().year.into()
+        self.get_gregorian_date().era_year().year
     }
 
     fn get_gregorian_month(&self) -> u8 {
@@ -119,7 +129,7 @@ impl JewishDateTrait for JewishDate {
     }
 
     fn get_days_in_jewish_month(&self) -> u8 {
-        JewishDate::get_days_in_jewish_month_static(self.get_jewish_month().into(), self.get_jewish_year())
+        JewishDate::get_days_in_jewish_month_static(self.get_jewish_month(), self.get_jewish_year())
     }
 
     fn is_cheshvan_long(&self) -> bool {
@@ -145,7 +155,22 @@ impl JewishDateTrait for JewishDate {
         let year = self.get_jewish_year();
         let month = self.get_jewish_month();
         let day = self.get_jewish_day_of_month();
-        JewishDate::get_days_since_start_of_jewish_year_static(year, month.into(), day)
+
+        let mut elapsed_days: i32 = day as i32;
+        if month < JewishMonth::Tishrei {
+            for m in JewishMonth::range_inclusive(JewishMonth::Tishrei, JewishDate::get_last_month_of_jewish_year(year))
+            {
+                elapsed_days += JewishDate::get_days_in_jewish_month_static(m, year) as i32;
+            }
+            for m in JewishMonth::range(JewishMonth::Nissan, month) {
+                elapsed_days += JewishDate::get_days_in_jewish_month_static(m, year) as i32;
+            }
+        } else {
+            for m in JewishMonth::range(JewishMonth::Tishrei, month) {
+                elapsed_days += JewishDate::get_days_in_jewish_month_static(m, year) as i32;
+            }
+        }
+        elapsed_days
     }
 
     fn get_chalakim_since_molad_tohu(&self) -> i64 {
@@ -165,13 +190,13 @@ impl JewishDateTrait for JewishDate {
     }
 
     fn get_jewish_year(&self) -> i32 {
-        self.get_hebrew_date().era_year().year.into()
+        self.get_hebrew_date().era_year().year
     }
 }
 
 impl JewishDate {
-    pub fn get_days_in_jewish_month_static(month: u8, year: i32) -> u8 {
-        match month.try_into().unwrap() {
+    pub fn get_days_in_jewish_month_static(month: JewishMonth, year: i32) -> u8 {
+        match month {
             JewishMonth::Iyar | JewishMonth::Tammuz | JewishMonth::Elul | JewishMonth::Teves => 29,
             JewishMonth::Cheshvan => {
                 if JewishDate::is_cheshvan_long_static(year) {
@@ -203,8 +228,8 @@ impl JewishDate {
     }
     pub fn get_jewish_calendar_elapsed_days(year: i32) -> i32 {
         let chalakim_since = JewishDate::get_chalakim_since_molad_tohu_static(year, JewishMonth::Tishrei.into());
-        let molad_day = (chalakim_since / _CHALAKIM_PER_DAY) as i64;
-        let molad_parts = (chalakim_since - molad_day as i64 * _CHALAKIM_PER_DAY) as i64;
+        let molad_day = chalakim_since / _CHALAKIM_PER_DAY;
+        let molad_parts = chalakim_since - molad_day * _CHALAKIM_PER_DAY;
 
         JewishDate::add_dechiyos(year, molad_day, molad_parts)
     }
@@ -221,58 +246,57 @@ impl JewishDate {
             _ => 31,
         }
     }
-    pub fn get_gregorian_date(&self) -> Date<Gregorian> {
-        self.get_hebrew_date().to_calendar(Gregorian)
-    }
 
     pub fn is_jewish_leap_year_static(year: i32) -> bool {
         let year_in_cycle = ((year - 1) % 19) + 1;
         matches!(year_in_cycle, 3 | 6 | 8 | 11 | 14 | 17 | 19)
     }
-    pub fn from_hebrew_date(year: i32, month: JewishMonth, day: u8) -> Option<Self> {
-        let is_leap_year = Date::try_new_from_codes(Some("am"), year as i32, MonthCode("M01".parse().ok()?), 1, Hebrew)
+    pub fn from_jewish_date(year: i32, month: JewishMonth, day: u8) -> Option<Self> {
+        let is_leap_year = Date::try_new_from_codes(Some("am"), year, MonthCode("M01".parse().ok()?), 1, Hebrew)
             .ok()?
             .is_in_leap_year();
 
-        let month_code: MonthCode;
-        if is_leap_year {
-            let month_code_str = match month {
-                JewishMonth::Tishrei => "M01",
-                JewishMonth::Cheshvan => "M02",
-                JewishMonth::Kislev => "M03",
-                JewishMonth::Teves => "M04",
-                JewishMonth::Shevat => "M05",
-                JewishMonth::Adar => "M05L",
-                JewishMonth::AdarII => "M06",
-                JewishMonth::Nissan => "M07",
-                JewishMonth::Iyar => "M08",
-                JewishMonth::Sivan => "M09",
-                JewishMonth::Tammuz => "M10",
-                JewishMonth::Av => "M11",
-                JewishMonth::Elul => "M12",
-            };
+        let month_code: MonthCode = match is_leap_year {
+            true => {
+                let month_code_str = match month {
+                    JewishMonth::Tishrei => "M01",
+                    JewishMonth::Cheshvan => "M02",
+                    JewishMonth::Kislev => "M03",
+                    JewishMonth::Teves => "M04",
+                    JewishMonth::Shevat => "M05",
+                    JewishMonth::Adar => "M05L",
+                    JewishMonth::AdarII => "M06",
+                    JewishMonth::Nissan => "M07",
+                    JewishMonth::Iyar => "M08",
+                    JewishMonth::Sivan => "M09",
+                    JewishMonth::Tammuz => "M10",
+                    JewishMonth::Av => "M11",
+                    JewishMonth::Elul => "M12",
+                };
 
-            month_code = MonthCode(month_code_str.parse().ok()?);
-        } else {
-            let month_code_str = match month {
-                JewishMonth::Tishrei => "M01",
-                JewishMonth::Cheshvan => "M02",
-                JewishMonth::Kislev => "M03",
-                JewishMonth::Teves => "M04",
-                JewishMonth::Shevat => "M05",
-                JewishMonth::Adar => "M06",
-                JewishMonth::Nissan => "M07",
-                JewishMonth::Iyar => "M08",
-                JewishMonth::Sivan => "M09",
-                JewishMonth::Tammuz => "M10",
-                JewishMonth::Av => "M11",
-                JewishMonth::Elul => "M12",
-                _ => return None,
-            };
-            month_code = MonthCode(month_code_str.parse().ok()?);
-        }
+                MonthCode(month_code_str.parse().ok()?)
+            }
+            false => {
+                let month_code_str = match month {
+                    JewishMonth::Tishrei => "M01",
+                    JewishMonth::Cheshvan => "M02",
+                    JewishMonth::Kislev => "M03",
+                    JewishMonth::Teves => "M04",
+                    JewishMonth::Shevat => "M05",
+                    JewishMonth::Adar => "M06",
+                    JewishMonth::Nissan => "M07",
+                    JewishMonth::Iyar => "M08",
+                    JewishMonth::Sivan => "M09",
+                    JewishMonth::Tammuz => "M10",
+                    JewishMonth::Av => "M11",
+                    JewishMonth::Elul => "M12",
+                    _ => return None,
+                };
+                MonthCode(month_code_str.parse().ok()?)
+            }
+        };
 
-        let hebrew_date = Date::try_new_from_codes(Some("am"), year as i32, month_code, day as u8, Hebrew);
+        let hebrew_date = Date::try_new_from_codes(Some("am"), year, month_code, day, Hebrew);
 
         let hebrew_date = hebrew_date.ok()?;
 
@@ -300,7 +324,7 @@ impl JewishDate {
         let minutes = adjusted_conjunction_parts / _CHALAKIM_PER_MINUTE;
         let chalakim = adjusted_conjunction_parts - (minutes * _CHALAKIM_PER_MINUTE);
         if hours >= 6 {
-            let _ = gregorian_date
+            gregorian_date
                 .try_add_with_options(DateDuration::for_days(1), DateAddOptions::default())
                 .ok()?;
         }
@@ -337,7 +361,7 @@ impl JewishDate {
         let mut rosh_hashana_day = molad_day;
 
         if (molad_parts >= 19440)
-            || (((molad_day % 7) == 2) && (molad_parts >= 9924) && !JewishDate::is_jewish_leap_year_static(year.into()))
+            || (((molad_day % 7) == 2) && (molad_parts >= 9924) && !JewishDate::is_jewish_leap_year_static(year))
             || (((molad_day % 7) == 1) && (molad_parts >= 16789) && (JewishDate::is_jewish_leap_year_static(year - 1)))
         {
             rosh_hashana_day += 1;
@@ -358,30 +382,11 @@ impl JewishDate {
         JewishDate::get_days_in_jewish_year_static(year) % 10 == 3
     }
 
-    fn get_days_since_start_of_jewish_year_static(year: i32, month: u8, day_of_month: u8) -> i32 {
-        let mut elapsed_days: i32 = day_of_month as i32;
-
-        if month < JewishMonth::Tishrei.into() {
-            for m in JewishMonth::Tishrei.into()..=JewishDate::get_last_month_of_jewish_year(year) {
-                elapsed_days += JewishDate::get_days_in_jewish_month_static(m, year) as i32;
-            }
-            for m in JewishMonth::Nissan.into()..month {
-                elapsed_days += JewishDate::get_days_in_jewish_month_static(m, year) as i32;
-            }
-        } else {
-            for m in JewishMonth::Tishrei.into()..month {
-                elapsed_days += JewishDate::get_days_in_jewish_month_static(m, year) as i32;
-            }
-        }
-
-        elapsed_days
-    }
-
-    fn get_last_month_of_jewish_year(year: i32) -> u8 {
+    fn get_last_month_of_jewish_year(year: i32) -> JewishMonth {
         if JewishDate::is_jewish_leap_year_static(year) {
-            13
+            JewishMonth::AdarII
         } else {
-            12
+            JewishMonth::Adar
         }
     }
 
@@ -413,540 +418,34 @@ impl JewishDate {
             month += 1;
         }
         let day_of_month: u8 = (abs_date - JewishDate::gregorian_date_to_abs_date(year, month, 1) + 1) as u8;
-        Date::try_new_gregorian(year as i32, month as u8, day_of_month as u8).ok()
+        Date::try_new_gregorian(year, month, day_of_month).ok()
     }
 }
 
-// #[cfg(test)]
-// mod jni_tests {
-
-//     use crate::test_utils::jni::{DEFAULT_TEST_ITERATIONS, create_jewish_dates, init_jvm};
-
-//     use super::*;
-
-//     use j4rs::InvocationArg;
-
-//     #[test]
-//     fn test_get_jewish_year_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_jewish_year() as i64;
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getJewishYear", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_jewish_month_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_jewish_month();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getJewishMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_jewish_day_of_month_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_jewish_day_of_month() as i64;
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getJewishDayOfMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_gregorian_year_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_gregorian_year();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getGregorianYear", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_gregorian_month_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_gregorian_month();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getGregorianMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_gregorian_day_of_month_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_gregorian_day_of_month();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getGregorianDayOfMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_day_of_week_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_day_of_week() as i64;
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getDayOfWeek", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_is_jewish_leap_year_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.is_jewish_leap_year();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "isJewishLeapYear", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<bool>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_days_in_jewish_year_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_days_in_jewish_year();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getDaysInJewishYear", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_days_in_jewish_month_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_days_in_jewish_month();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getDaysInJewishMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_is_cheshvan_long_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.is_cheshvan_long();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "isCheshvanLong", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<bool>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_is_kislev_short_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.is_kislev_short();
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "isKislevShort", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<bool>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_cheshvan_kislev_kviah_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_cheshvan_kislev_kviah() as i64;
-
-//             let java_result = jvm
-//                 .invoke(&java_date, "getCheshvanKislevKviah", InvocationArg::empty())
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_days_since_start_of_jewish_year_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_days_since_start_of_jewish_year();
-
-//             let java_result = jvm
-//                 .invoke(
-//                     &java_date,
-//                     "getDaysSinceStartOfJewishYear",
-//                     InvocationArg::empty(),
-//                 )
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result as i64, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_chalakim_since_molad_tohu_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let result = rust_date.get_chalakim_since_molad_tohu();
-
-//             let java_result = jvm
-//                 .invoke(
-//                     &java_date,
-//                     "getChalakimSinceMoladTohu",
-//                     InvocationArg::empty(),
-//                 )
-//                 .unwrap();
-//             let java_result = jvm.to_rust::<i64>(java_result).unwrap();
-
-//             assert_eq!(result, java_result, "{}", message);
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_molad_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let rust_molad = rust_date.get_molad();
-//             if rust_molad.is_none() {
-//                 continue;
-//             }
-//             let rust_molad = rust_molad.unwrap();
-
-//             let java_molad = jvm
-//                 .invoke(&java_date, "getMolad", InvocationArg::empty())
-//                 .unwrap();
-
-//             let java_hours = jvm
-//                 .invoke(&java_molad, "getMoladHours", InvocationArg::empty())
-//                 .unwrap();
-//             let java_hours = jvm.to_rust::<i64>(java_hours).unwrap();
-
-//             let java_minutes = jvm
-//                 .invoke(&java_molad, "getMoladMinutes", InvocationArg::empty())
-//                 .unwrap();
-//             let java_minutes = jvm.to_rust::<i64>(java_minutes).unwrap();
-
-//             let java_chalakim = jvm
-//                 .invoke(&java_molad, "getMoladChalakim", InvocationArg::empty())
-//                 .unwrap();
-//             let java_chalakim = jvm.to_rust::<i64>(java_chalakim).unwrap();
-
-//             assert_eq!(
-//                 rust_molad.get_hours(),
-//                 java_hours,
-//                 "Hours mismatch: {}",
-//                 message
-//             );
-//             assert_eq!(
-//                 rust_molad.get_minutes(),
-//                 java_minutes,
-//                 "Minutes mismatch: {}",
-//                 message
-//             );
-//             assert_eq!(
-//                 rust_molad.get_chalakim(),
-//                 java_chalakim,
-//                 "Chalakim mismatch: {}",
-//                 message
-//             );
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-
-//     #[test]
-//     fn test_get_molad_as_date_against_java() {
-//         let jvm = init_jvm();
-//         let mut ran = false;
-//         for _ in 0..DEFAULT_TEST_ITERATIONS {
-//             let test_case = create_jewish_dates(&jvm);
-//             if test_case.is_none() {
-//                 continue;
-//             }
-//             ran = true;
-//             let (rust_date, java_date, message) = test_case.unwrap();
-
-//             let rust_molad_date = rust_date.get_molad_as_date();
-//             if rust_molad_date.is_none() {
-//                 continue;
-//             }
-//             let rust_molad_date = rust_molad_date.unwrap();
-
-//             let java_molad = jvm
-//                 .invoke(&java_date, "getMolad", InvocationArg::empty())
-//                 .unwrap();
-
-//             let java_year = jvm
-//                 .invoke(&java_molad, "getJewishYear", InvocationArg::empty())
-//                 .unwrap();
-//             let java_year = jvm.to_rust::<i64>(java_year).unwrap();
-
-//             let java_month = jvm
-//                 .invoke(&java_molad, "getJewishMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_month = jvm.to_rust::<i64>(java_month).unwrap();
-
-//             let java_day = jvm
-//                 .invoke(&java_molad, "getJewishDayOfMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_day = jvm.to_rust::<i64>(java_day).unwrap();
-
-//             assert_eq!(
-//                 rust_molad_date.get_jewish_year() as i64,
-//                 java_year,
-//                 "Year mismatch: {}",
-//                 message
-//             );
-//             assert_eq!(
-//                 rust_molad_date.get_jewish_month() as i64,
-//                 java_month,
-//                 "Month mismatch: {}",
-//                 message
-//             );
-//             assert_eq!(
-//                 rust_molad_date.get_jewish_day_of_month() as i64,
-//                 java_day,
-//                 "Day mismatch: {}",
-//                 message
-//             );
-
-//             let java_gregorian_year = jvm
-//                 .invoke(&java_molad, "getGregorianYear", InvocationArg::empty())
-//                 .unwrap();
-//             let java_gregorian_year = jvm.to_rust::<i64>(java_gregorian_year).unwrap();
-
-//             let java_gregorian_month = jvm
-//                 .invoke(&java_molad, "getGregorianMonth", InvocationArg::empty())
-//                 .unwrap();
-//             let java_gregorian_month = jvm.to_rust::<i64>(java_gregorian_month).unwrap();
-
-//             let java_gregorian_day = jvm
-//                 .invoke(
-//                     &java_molad,
-//                     "getGregorianDayOfMonth",
-//                     InvocationArg::empty(),
-//                 )
-//                 .unwrap();
-//             let java_gregorian_day = jvm.to_rust::<i64>(java_gregorian_day).unwrap();
-
-//             assert_eq!(
-//                 rust_molad_date.get_gregorian_year() as i64,
-//                 java_gregorian_year,
-//                 "Gregorian year mismatch: {}",
-//                 message
-//             );
-//             assert_eq!(
-//                 rust_molad_date.get_gregorian_month() as i64,
-//                 java_gregorian_month,
-//                 "Gregorian month mismatch: {}",
-//                 message
-//             );
-//             assert_eq!(
-//                 rust_molad_date.get_gregorian_day_of_month() as i64,
-//                 java_gregorian_day,
-//                 "Gregorian day mismatch: {}",
-//                 message
-//             );
-//         }
-//         assert!(ran, "No test cases were run");
-//     }
-// }
+impl DefmtFormatTrait for JewishDate {}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for JewishDate {
+    fn format(&self, f: defmt::Formatter) {
+        let month = self.hebrew_date.month().ordinal;
+        let day = self.hebrew_date.day_of_month().0;
+        match self.hebrew_date.year() {
+            YearInfo::Era(era_year) => {
+                defmt::write!(
+                    f,
+                    "JewishDate({}-{}-{}, {} era)",
+                    era_year.year,
+                    month,
+                    day,
+                    era_year.era.as_str()
+                )
+            }
+            YearInfo::Cyclic(CyclicYear { year, related_iso, .. }) => {
+                defmt::write!(f, "JewishDate({}-{}-{}, ISO year {})", year, month, day, related_iso)
+            }
+            _ => {
+                defmt::write!(f, "JewishDate(unknown year-{}-{})", month, day)
+            }
+        }
+    }
+}

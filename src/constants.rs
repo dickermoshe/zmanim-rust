@@ -1,59 +1,59 @@
 use chrono::{DateTime, Utc};
+use core::{array::IntoIter, fmt::Debug, iter::Flatten};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-
-use core::fmt::Debug;
-pub static _JULIAN_DAY_JAN_1_2000: f64 = 2451545.0;
-pub static _JULIAN_DAYS_PER_CENTURY: f64 = 36525.0;
-pub static _EARTH_RADIUS: f64 = 6356.9;
-pub static _GEOMETRIC_ZENITH: f64 = 90.0;
-pub static _CIVIL_ZENITH: f64 = 96.0;
-pub static _NAUTICAL_ZENITH: f64 = 102.0;
-pub static _ASTRONOMICAL_ZENITH: f64 = 108.0;
-pub static _SOLAR_RADIUS: f64 = 16.0 / 60.0;
-pub static _REFRACTION: f64 = 34.0 / 60.0;
-pub static _ZENITH_16_POINT_1: f64 = 90.0 + 16.1;
-pub static _ZENITH_8_POINT_5: f64 = 90.0 + 8.5;
-pub static _ZENITH_3_POINT_7: f64 = 90.0 + 3.7;
-pub static _ZENITH_3_POINT_8: f64 = 90.0 + 3.8;
-pub static _ZENITH_5_POINT_95: f64 = 90.0 + 5.95;
-pub static _ZENITH_7_POINT_083: f64 = 90.0 + 7.0 + (5.0 / 60.0);
-pub static _ZENITH_10_POINT_2: f64 = 90.0 + 10.2;
-pub static _ZENITH_11_DEGREES: f64 = 90.0 + 11.0;
-pub static _ZENITH_11_POINT_5: f64 = 90.0 + 11.5;
-pub static _ZENITH_13_POINT_24: f64 = 90.0 + 13.24;
-pub static _ZENITH_19_DEGREES: f64 = 90.0 + 19.0;
-pub static _ZENITH_19_POINT_8: f64 = 90.0 + 19.8;
-pub static _ZENITH_26_DEGREES: f64 = 90.0 + 26.0;
-pub static _ZENITH_4_POINT_37: f64 = 90.0 + 4.37;
-pub static _ZENITH_4_POINT_61: f64 = 90.0 + 4.61;
-pub static _ZENITH_4_POINT_8: f64 = 90.0 + 4.8;
-pub static _ZENITH_3_POINT_65: f64 = 90.0 + 3.65;
-pub static _ZENITH_3_POINT_676: f64 = 90.0 + 3.676;
-pub static _ZENITH_5_POINT_88: f64 = 90.0 + 5.88;
-pub static _ZENITH_1_POINT_583: f64 = 90.0 + 1.583;
-pub static _ZENITH_16_POINT_9: f64 = 90.0 + 16.9;
-pub static _ZENITH_6_DEGREES: f64 = 90.0 + 6.0;
-pub static _ZENITH_6_POINT_45: f64 = 90.0 + 6.45;
-pub static _ZENITH_7_POINT_65: f64 = 90.0 + 7.65;
-pub static _ZENITH_7_POINT_67: f64 = 90.0 + 7.67;
-pub static _ZENITH_9_POINT_3: f64 = 90.0 + 9.3;
-pub static _ZENITH_9_POINT_5: f64 = 90.0 + 9.5;
-pub static _ZENITH_9_POINT_75: f64 = 90.0 + 9.75;
-pub static _ZENITH_MINUS_2_POINT_1: f64 = 90.0 - 2.1;
-pub static _ZENITH_MINUS_2_POINT_8: f64 = 90.0 - 2.8;
-pub static _ZENITH_MINUS_3_POINT_05: f64 = 90.0 - 3.05;
-pub static _CHALAKIM_PER_MINUTE: i64 = 18;
-pub static _CHALAKIM_PER_HOUR: i64 = 1080;
-pub static _CHALAKIM_PER_DAY: i64 = 25920;
-pub static _CHALAKIM_PER_MONTH: i64 = 765433;
-pub static _CHALAKIM_MOLAD_TOHU: i64 = 31524;
-pub static _JEWISH_EPOCH: i64 = -1373429;
-pub static _MINUTE_MILLIS: i64 = 60 * 1000;
-pub static _HOUR_MILLIS: i64 = 60 * 1000 * 60;
-pub static _BAVLI_DAF_YOMI_START_DAY: DateTime<Utc> = DateTime::from_timestamp_millis(-1461369600000).unwrap();
-pub static _BAVLI_SHEKALIM_CHANGE_DAY: DateTime<Utc> = DateTime::from_timestamp_millis(172800000000).unwrap();
-pub static _YERUSHALMI_DAF_YOMI_START_DAY: DateTime<Utc> = DateTime::from_timestamp_millis(318297600000).unwrap();
-pub static _YERUSHALMI_LENGTH: i64 = 1554;
+pub(crate) static _JULIAN_DAY_JAN_1_2000: f64 = 2451545.0;
+pub(crate) static _JULIAN_DAYS_PER_CENTURY: f64 = 36525.0;
+pub(crate) static _EARTH_RADIUS: f64 = 6356.9;
+pub(crate) static _GEOMETRIC_ZENITH: f64 = 90.0;
+pub(crate) static _CIVIL_ZENITH: f64 = 96.0;
+pub(crate) static _NAUTICAL_ZENITH: f64 = 102.0;
+pub(crate) static _ASTRONOMICAL_ZENITH: f64 = 108.0;
+pub(crate) static _SOLAR_RADIUS: f64 = 16.0 / 60.0;
+pub(crate) static _REFRACTION: f64 = 34.0 / 60.0;
+pub(crate) static _ZENITH_16_POINT_1: f64 = 90.0 + 16.1;
+pub(crate) static _ZENITH_8_POINT_5: f64 = 90.0 + 8.5;
+pub(crate) static _ZENITH_3_POINT_7: f64 = 90.0 + 3.7;
+pub(crate) static _ZENITH_3_POINT_8: f64 = 90.0 + 3.8;
+pub(crate) static _ZENITH_5_POINT_95: f64 = 90.0 + 5.95;
+pub(crate) static _ZENITH_7_POINT_083: f64 = 90.0 + 7.0 + (5.0 / 60.0);
+pub(crate) static _ZENITH_10_POINT_2: f64 = 90.0 + 10.2;
+pub(crate) static _ZENITH_11_DEGREES: f64 = 90.0 + 11.0;
+pub(crate) static _ZENITH_11_POINT_5: f64 = 90.0 + 11.5;
+pub(crate) static _ZENITH_13_POINT_24: f64 = 90.0 + 13.24;
+pub(crate) static _ZENITH_19_DEGREES: f64 = 90.0 + 19.0;
+pub(crate) static _ZENITH_19_POINT_8: f64 = 90.0 + 19.8;
+pub(crate) static _ZENITH_26_DEGREES: f64 = 90.0 + 26.0;
+pub(crate) static _ZENITH_4_POINT_37: f64 = 90.0 + 4.37;
+pub(crate) static _ZENITH_4_POINT_61: f64 = 90.0 + 4.61;
+pub(crate) static _ZENITH_4_POINT_8: f64 = 90.0 + 4.8;
+pub(crate) static _ZENITH_3_POINT_65: f64 = 90.0 + 3.65;
+pub(crate) static _ZENITH_3_POINT_676: f64 = 90.0 + 3.676;
+pub(crate) static _ZENITH_5_POINT_88: f64 = 90.0 + 5.88;
+pub(crate) static _ZENITH_1_POINT_583: f64 = 90.0 + 1.583;
+pub(crate) static _ZENITH_16_POINT_9: f64 = 90.0 + 16.9;
+pub(crate) static _ZENITH_6_DEGREES: f64 = 90.0 + 6.0;
+pub(crate) static _ZENITH_6_POINT_45: f64 = 90.0 + 6.45;
+pub(crate) static _ZENITH_7_POINT_65: f64 = 90.0 + 7.65;
+pub(crate) static _ZENITH_7_POINT_67: f64 = 90.0 + 7.67;
+pub(crate) static _ZENITH_9_POINT_3: f64 = 90.0 + 9.3;
+pub(crate) static _ZENITH_9_POINT_5: f64 = 90.0 + 9.5;
+pub(crate) static _ZENITH_9_POINT_75: f64 = 90.0 + 9.75;
+pub(crate) static _ZENITH_MINUS_2_POINT_1: f64 = 90.0 - 2.1;
+pub(crate) static _ZENITH_MINUS_2_POINT_8: f64 = 90.0 - 2.8;
+pub(crate) static _ZENITH_MINUS_3_POINT_05: f64 = 90.0 - 3.05;
+pub(crate) static _CHALAKIM_PER_MINUTE: i64 = 18;
+pub(crate) static _CHALAKIM_PER_HOUR: i64 = 1080;
+pub(crate) static _CHALAKIM_PER_DAY: i64 = 25920;
+pub(crate) static _CHALAKIM_PER_MONTH: i64 = 765433;
+pub(crate) static _CHALAKIM_MOLAD_TOHU: i64 = 31524;
+pub(crate) static _JEWISH_EPOCH: i64 = -1373429;
+pub(crate) static _MINUTE_MILLIS: i64 = 60 * 1000;
+pub(crate) static _HOUR_MILLIS: i64 = 60 * 1000 * 60;
+pub(crate) static _BAVLI_DAF_YOMI_START_DAY: DateTime<Utc> = DateTime::from_timestamp_millis(-1461369600000).unwrap();
+pub(crate) static _BAVLI_SHEKALIM_CHANGE_DAY: DateTime<Utc> = DateTime::from_timestamp_millis(172800000000).unwrap();
+pub(crate) static _YERUSHALMI_DAF_YOMI_START_DAY: DateTime<Utc> =
+    DateTime::from_timestamp_millis(318297600000).unwrap();
+pub(crate) static _YERUSHALMI_LENGTH: u64 = 1554;
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
@@ -464,7 +464,7 @@ impl DayOfWeek {
     }
 }
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum JewishMonth {
     Nissan = 1,
@@ -481,7 +481,67 @@ pub enum JewishMonth {
     Adar = 12,
     AdarII = 13,
 }
+
 impl JewishMonth {
+    /// Return an array of all the months between from and to, inclusive.
+    /// Returns an array with a length of 13 padded with None.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kosher_java::constants::JewishMonth;
+    /// let months = JewishMonth::range_inclusive(JewishMonth::Tishrei, JewishMonth::Adar);
+    /// assert_eq!(months, [
+    ///     Some(JewishMonth::Tishrei), Some(JewishMonth::Cheshvan), Some(JewishMonth::Kislev), Some(JewishMonth::Teves),
+    ///     Some(JewishMonth::Shevat), Some(JewishMonth::Adar), None, None, None, None, None, None, None
+    /// ]);
+    /// ```
+    pub(crate) fn range_inclusive(from: JewishMonth, to: JewishMonth) -> Flatten<IntoIter<Option<JewishMonth>, 13>> {
+        let mut result = [None; 13];
+        let from_index = from as u8 - 1;
+        let to_index = to as u8 - 1;
+        if from_index > to_index {
+            return [None; 13].into_iter().flatten();
+        }
+        for i in from_index..=to_index {
+            // We can safely unwrap here because we know the value is valid
+            #[allow(clippy::unwrap_used)]
+            {
+                result[i as usize] = Some(JewishMonth::try_from(i).unwrap());
+            }
+        }
+        result.into_iter().flatten()
+    }
+    /// Return an array of all the months between from and to, inclusive.
+    /// Returns an array with a length of 13 padded with None.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kosher_java::constants::JewishMonth;
+    /// let months = JewishMonth::range(JewishMonth::Tishrei, JewishMonth::Av);
+    /// assert_eq!(months, [
+    ///     Some(JewishMonth::Tishrei), Some(JewishMonth::Cheshvan), Some(JewishMonth::Kislev), Some(JewishMonth::Teves),
+    ///     Some(JewishMonth::Shevat), Some(JewishMonth::Adar), None, None, None, None, None, None, None
+    /// ]);
+    /// ```
+    pub(crate) fn range(from: JewishMonth, to: JewishMonth) -> Flatten<IntoIter<Option<JewishMonth>, 13>> {
+        let mut result = [None; 13];
+        let from_index = from as u8;
+        let to_index = to as u8;
+        if from_index > to_index {
+            return [None; 13].into_iter().flatten();
+        }
+        for i in from_index..to_index {
+            // We can safely unwrap here because we know the value is valid
+            #[allow(clippy::unwrap_used)]
+            {
+                result[i as usize] = Some(JewishMonth::try_from(i).unwrap());
+            }
+        }
+        result.into_iter().flatten()
+    }
+
     pub fn en_string(&self, is_leap_year: bool) -> &str {
         match self {
             JewishMonth::Nissan => "Nissan",
@@ -820,41 +880,6 @@ impl YerushalmiTractate {
     }
 }
 
-// pub trait TefilaRulesTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync {
-//     fn is_tachanun_recited_shacharis(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_tachanun_recited_mincha(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_hallel_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_hallel_shalem_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_al_hanissim_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_yaaleh_veyavo_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_mizmor_lesoda_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_vesein_tal_umatar_start_date(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_vesein_tal_umatar_starting_tonight(
-//         &self,
-//         jewish_calendar: &impl JewishCalendarTrait,
-//     ) -> bool;
-
-//     fn is_vesein_tal_umatar_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_vesein_beracha_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_mashiv_haruach_start_date(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_mashiv_haruach_end_date(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_mashiv_haruach_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-
-//     fn is_morid_hatal_recited(&self, jewish_calendar: &impl JewishCalendarTrait) -> bool;
-// }
-
 // pub trait JewishCalendarTrait: Debug + Clone + PartialEq + PartialOrd + Send + Sync {
 //     fn get_jewish_date(&self) -> &impl JewishDateTrait;
 //     fn get_in_israel(&self) -> bool;
@@ -939,99 +964,6 @@ impl YerushalmiTractate {
 //     fn is_morid_hatal_recited(&self) -> bool;
 // }
 
-// pub trait ZmanimCalendarTrait<Tz: TimeZone>: Clone + Sized {
-//     fn get_astronomical_calendar(&self) -> &impl AstronomicalCalendarTrait<Tz>;
-//     fn get_use_astronomical_chatzos(&self) -> bool;
-//     fn get_use_astronomical_chatzos_for_other_zmanim(&self) -> bool;
-//     fn get_candle_lighting_offset(&self) -> Duration;
-//     fn get_ateret_torah_sunset_offset(&self) -> Duration;
-//     fn get_percent_of_shaah_zmanis_from_degrees(&self, degrees: f64, sunset: bool) -> Option<f64>;
-//     fn get_shaah_zmanis_gra(&self) -> Option<Duration>;
-//     fn get_shaah_zmanis_mga(&self) -> Option<Duration>;
-//     fn get_zman(&self, zman: &Zman) -> Option<DateTime<Tz>> {
-//         return zman.calculate(self);
-//     }
-//     fn _get_half_day_based_zman(
-//         &self,
-//         start_of_half_day: DateTime<Tz>,
-//         end_of_half_day: DateTime<Tz>,
-//         hours: f64,
-//     ) -> Option<DateTime<Tz>>;
-//     fn _get_half_day_based_shaah_zmanis(
-//         &self,
-//         start_of_half_day: &DateTime<Tz>,
-//         end_of_half_day: &DateTime<Tz>,
-//     ) -> Option<Duration>;
-//     fn _get_shaah_zmanis_based_zman(
-//         &self,
-//         start_of_day: DateTime<Tz>,
-//         end_of_day: DateTime<Tz>,
-//         hours: f64,
-//     ) -> Option<DateTime<Tz>>;
-
-//     fn _get_sof_zman_shma(
-//         &self,
-//         start_of_day: DateTime<Tz>,
-//         end_of_day: Option<DateTime<Tz>>,
-//         synchronous: bool,
-//     ) -> Option<DateTime<Tz>>;
-
-//     fn _get_mincha_ketana(
-//         &self,
-//         start_of_day: Option<DateTime<Tz>>,
-//         end_of_day: DateTime<Tz>,
-//         synchronous: bool,
-//     ) -> Option<DateTime<Tz>>;
-
-//     fn _get_sof_zman_tfila(
-//         &self,
-//         start_of_day: DateTime<Tz>,
-//         end_of_day: Option<DateTime<Tz>>,
-//         synchronous: bool,
-//     ) -> Option<DateTime<Tz>>;
-
-//     fn _get_mincha_gedola(
-//         &self,
-//         start_of_day: Option<DateTime<Tz>>,
-//         end_of_day: DateTime<Tz>,
-//         synchronous: bool,
-//     ) -> Option<DateTime<Tz>>;
-
-//     fn _get_plag_hamincha(
-//         &self,
-//         start_of_day: Option<DateTime<Tz>>,
-//         end_of_day: DateTime<Tz>,
-//         synchronous: bool,
-//     ) -> Option<DateTime<Tz>>;
-
-//     fn _get_samuch_le_mincha_ketana(
-//         &self,
-//         start_of_day: Option<DateTime<Tz>>,
-//         end_of_day: DateTime<Tz>,
-//         synchronous: bool,
-//     ) -> Option<DateTime<Tz>>;
-//     fn _get_sof_zman_kidush_levana_15_days(
-//         &self,
-//         alos: &Option<DateTime<Tz>>,
-//         tzais: &Option<DateTime<Tz>>,
-//     ) -> Option<DateTime<Tz>>;
-//     fn _get_sof_zman_kidush_levana_between_moldos(
-//         &self,
-//         alos: &Option<DateTime<Tz>>,
-//         tzais: &Option<DateTime<Tz>>,
-//     ) -> Option<DateTime<Tz>>;
-//     fn _get_tchilas_zman_kidush_levana_3_days(
-//         &self,
-//         alos: &Option<DateTime<Tz>>,
-//         tzais: &Option<DateTime<Tz>>,
-//     ) -> Option<DateTime<Tz>>;
-//     fn _get_tchilas_zman_kidush_levana_7_days(
-//         &self,
-//         alos: &Option<DateTime<Tz>>,
-//         tzais: &Option<DateTime<Tz>>,
-//     ) -> Option<DateTime<Tz>>;
-// }
-
 // pub enum Calculations<Tz: TimeZone> {
 //     HalfDayBasedZman(DateTime<Tz>, DateTime<Tz>, f64),
 //     LocalMeanTime(f64),
@@ -1107,226 +1039,168 @@ impl YerushalmiTractate {
 //         }
 //     }
 // }
-// #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy)]
-// #[repr(u32)]
-// pub enum Zman {
-//     // Alos16Point1Degrees,
-//     // Alos18Degrees,
-//     // Alos19Degrees,
-//     // Alos19Point8Degrees,
-//     // Alos60,
-//     Alos72,
-//     // Alos72Zmanis,
-//     // Alos90,
-//     // Alos90Zmanis,
-//     // Alos96,
-//     // Alos96Zmanis,
-//     // AlosBaalHatanya,
-//     AlosHashachar,
-//     // BainHashmashosRT13Point24Degrees,
-//     // BainHashmashosRT13Point5MinutesBefore7Point083Degrees,
-//     // BainHashmashosRT2Stars,
-//     // BainHashmashosRT58Point5Minutes,
-//     // BainHashmashosYereim13Point5Minutes,
-//     // BainHashmashosYereim16Point875Minutes,
-//     // BainHashmashosYereim18Minutes,
-//     // BainHashmashosYereim2Point1Degrees,
-//     // BainHashmashosYereim2Point8Degrees,
-//     // BainHashmashosYereim3Point05Degrees,
-//     CandleLighting,
-//     Chatzos,
-//     ChatzosAsHalfDay,
-//     // FixedLocalChatzos,
-//     MinchaGedola,
-//     // MinchaGedola16Point1Degrees,
-//     // MinchaGedola30Minutes,
-//     // MinchaGedola72Minutes,
-//     // MinchaGedolaAhavatShalom,
-//     // MinchaGedolaAteretTorah,
-//     // MinchaGedolaBaalHatanya,
-//     // MinchaGedolaBaalHatanyaGreaterThan30,
-//     // MinchaGedolaGRAFixedLocalChatzos30Minutes,
-//     // MinchaGedolaGreaterThan30,
-//     MinchaKetana,
-//     // MinchaKetana16Point1Degrees,
-//     // MinchaKetana72Minutes,
-//     // MinchaKetanaAhavatShalom,
-//     // MinchaKetanaAteretTorah,
-//     // MinchaKetanaBaalHatanya,
-//     // MinchaKetanaGRAFixedLocalChatzosToSunset,
-//     // Misheyakir10Point2Degrees,
-//     // Misheyakir11Degrees,
-//     // Misheyakir11Point5Degrees,
-//     // Misheyakir7Point65Degrees,
-//     // Misheyakir9Point5Degrees,
-//     // Molad,
-//     // PlagAhavatShalom,
-//     // PlagAlos16Point1ToTzaisGeonim7Point083Degrees,
-//     PlagHamincha,
-//     // PlagHamincha60Minutes,
-//     // PlagHaminchaAteretTorah,
-//     // PlagHaminchaBaalHatanya,
-//     // PlagHaminchaGRAFixedLocalChatzosToSunset,
-//     // SamuchLeMinchaKetana16Point1Degrees,
-//     // SamuchLeMinchaKetana72Minutes,
-//     // SamuchLeMinchaKetanaGRA,
-//     // SofZmanAchilasChametzBaalHatanya,
-//     // SofZmanAchilasChametzGRA,
-//     // SofZmanAchilasChametzMGA16Point1Degrees,
-//     // SofZmanAchilasChametzMGA72Minutes,
-//     // SofZmanAchilasChametzMGA72MinutesZmanis,
-//     // SofZmanBiurChametzBaalHatanya,
-//     // SofZmanBiurChametzGRA,
-//     // SofZmanBiurChametzMGA16Point1Degrees,
-//     // SofZmanBiurChametzMGA72Minutes,
-//     // SofZmanBiurChametzMGA72MinutesZmanis,
-//     // SofZmanKidushLevana15Days,
-//     // SofZmanKidushLevanaBetweenMoldos,
-//     // SofZmanShma3HoursBeforeChatzos,
-//     // SofZmanShmaAlos16Point1ToSunset,
-//     // SofZmanShmaAlos16Point1ToTzaisGeonim7Point083Degrees,
-//     // SofZmanShmaAteretTorah,
-//     // SofZmanShmaBaalHatanya,
-//     SofZmanShmaGRA,
-//     // SofZmanShmaGRASunriseToFixedLocalChatzos,
-//     SofZmanShmaMGA,
-//     // SofZmanShmaMGA120Minutes,
-//     // SofZmanShmaMGA16Point1Degrees,
-//     // SofZmanShmaMGA16Point1DegreesToFixedLocalChatzos,
-//     // SofZmanShmaMGA18Degrees,
-//     // SofZmanShmaMGA18DegreesToFixedLocalChatzos,
-//     // SofZmanShmaMGA19Point8Degrees,
-//     // SofZmanShmaMGA72Minutes,
-//     // SofZmanShmaMGA72MinutesToFixedLocalChatzos,
-//     // SofZmanShmaMGA72MinutesZmanis,
-//     // SofZmanShmaMGA90Minutes,
-//     // SofZmanShmaMGA90MinutesToFixedLocalChatzos,
-//     // SofZmanShmaMGA90MinutesZmanis,
-//     // SofZmanShmaMGA96Minutes,
-//     // SofZmanShmaMGA96MinutesZmanis,
-//     // SofZmanTfila2HoursBeforeChatzos,
-//     // SofZmanTfilaAteretTorah,
-//     // SofZmanTfilaBaalHatanya,
-//     SofZmanTfilaGRA,
-//     // SofZmanTfilaGRASunriseToFixedLocalChatzos,
-//     SofZmanTfilaMGA,
-//     // SofZmanTfilaMGA120Minutes,
-//     // SofZmanTfilaMGA16Point1Degrees,
-//     // SofZmanTfilaMGA18Degrees,
-//     // SofZmanTfilaMGA19Point8Degrees,
-//     // SofZmanTfilaMGA72Minutes,
-//     // SofZmanTfilaMGA72MinutesZmanis,
-//     // SofZmanTfilaMGA90Minutes,
-//     // SofZmanTfilaMGA90MinutesZmanis,
-//     // SofZmanTfilaMGA96Minutes,
-//     // SofZmanTfilaMGA96MinutesZmanis,
-//     // TchilasZmanKidushLevana3Days,
-//     // TchilasZmanKidushLevana7Days,
-//     Tzais,
-//     // Tzais16Point1Degrees,
-//     // Tzais18Degrees,
-//     // Tzais19Point8Degrees,
-//     // Tzais50,
-//     // Tzais60,
-//     Tzais72,
-//     // Tzais72Zmanis,
-//     // Tzais90,
-//     // Tzais90Zmanis,
-//     // Tzais96,
-//     // Tzais96Zmanis,
-//     // TzaisAteretTorah,
-//     // TzaisBaalHatanya,
-//     // TzaisGeonim3Point7Degrees,
-//     // TzaisGeonim3Point8Degrees,
-//     // TzaisGeonim4Point37Degrees,
-//     // TzaisGeonim4Point61Degrees,
-//     // TzaisGeonim4Point8Degrees,
-//     // TzaisGeonim5Point88Degrees,
-//     // TzaisGeonim5Point95Degrees,
-//     // TzaisGeonim6Point45Degrees,
-//     // TzaisGeonim7Point083Degrees,
-//     // TzaisGeonim7Point67Degrees,
-//     // TzaisGeonim8Point5Degrees,
-//     // TzaisGeonim9Point3Degrees,
-//     // TzaisGeonim9Point75Degrees,
-// }
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy)]
+#[repr(u16)]
+pub enum Zman {
+    // Alos16Point1Degrees,
+    // Alos18Degrees,
+    // Alos19Degrees,
+    // Alos19Point8Degrees,
+    // Alos60,
+    Alos72,
+    // Alos72Zmanis,
+    // Alos90,
+    // Alos90Zmanis,
+    // Alos96,
+    // Alos96Zmanis,
+    // AlosBaalHatanya,
+    AlosHashachar,
+    // BainHashmashosRT13Point24Degrees,
+    // BainHashmashosRT13Point5MinutesBefore7Point083Degrees,
+    // BainHashmashosRT2Stars,
+    // BainHashmashosRT58Point5Minutes,
+    // BainHashmashosYereim13Point5Minutes,
+    // BainHashmashosYereim16Point875Minutes,
+    // BainHashmashosYereim18Minutes,
+    // BainHashmashosYereim2Point1Degrees,
+    // BainHashmashosYereim2Point8Degrees,
+    // BainHashmashosYereim3Point05Degrees,
+    CandleLighting,
+    Chatzos,
+    ChatzosAsHalfDay,
+    // FixedLocalChatzos,
+    MinchaGedola,
+    // MinchaGedola16Point1Degrees,
+    // MinchaGedola30Minutes,
+    // MinchaGedola72Minutes,
+    // MinchaGedolaAhavatShalom,
+    // MinchaGedolaAteretTorah,
+    // MinchaGedolaBaalHatanya,
+    // MinchaGedolaBaalHatanyaGreaterThan30,
+    // MinchaGedolaGRAFixedLocalChatzos30Minutes,
+    // MinchaGedolaGreaterThan30,
+    MinchaKetana,
+    // MinchaKetana16Point1Degrees,
+    // MinchaKetana72Minutes,
+    // MinchaKetanaAhavatShalom,
+    // MinchaKetanaAteretTorah,
+    // MinchaKetanaBaalHatanya,
+    // MinchaKetanaGRAFixedLocalChatzosToSunset,
+    // Misheyakir10Point2Degrees,
+    // Misheyakir11Degrees,
+    // Misheyakir11Point5Degrees,
+    // Misheyakir7Point65Degrees,
+    // Misheyakir9Point5Degrees,
+    // Molad,
+    // PlagAhavatShalom,
+    // PlagAlos16Point1ToTzaisGeonim7Point083Degrees,
+    PlagHamincha,
+    // PlagHamincha60Minutes,
+    // PlagHaminchaAteretTorah,
+    // PlagHaminchaBaalHatanya,
+    // PlagHaminchaGRAFixedLocalChatzosToSunset,
+    // SamuchLeMinchaKetana16Point1Degrees,
+    // SamuchLeMinchaKetana72Minutes,
+    // SamuchLeMinchaKetanaGRA,
+    // SofZmanAchilasChametzBaalHatanya,
+    // SofZmanAchilasChametzGRA,
+    // SofZmanAchilasChametzMGA16Point1Degrees,
+    // SofZmanAchilasChametzMGA72Minutes,
+    // SofZmanAchilasChametzMGA72MinutesZmanis,
+    // SofZmanBiurChametzBaalHatanya,
+    // SofZmanBiurChametzGRA,
+    // SofZmanBiurChametzMGA16Point1Degrees,
+    // SofZmanBiurChametzMGA72Minutes,
+    // SofZmanBiurChametzMGA72MinutesZmanis,
+    // SofZmanKidushLevana15Days,
+    // SofZmanKidushLevanaBetweenMoldos,
+    // SofZmanShma3HoursBeforeChatzos,
+    // SofZmanShmaAlos16Point1ToSunset,
+    // SofZmanShmaAlos16Point1ToTzaisGeonim7Point083Degrees,
+    // SofZmanShmaAteretTorah,
+    // SofZmanShmaBaalHatanya,
+    SofZmanShmaGRA,
+    // SofZmanShmaGRASunriseToFixedLocalChatzos,
+    SofZmanShmaMGA,
+    // SofZmanShmaMGA120Minutes,
+    // SofZmanShmaMGA16Point1Degrees,
+    // SofZmanShmaMGA16Point1DegreesToFixedLocalChatzos,
+    // SofZmanShmaMGA18Degrees,
+    // SofZmanShmaMGA18DegreesToFixedLocalChatzos,
+    // SofZmanShmaMGA19Point8Degrees,
+    // SofZmanShmaMGA72Minutes,
+    // SofZmanShmaMGA72MinutesToFixedLocalChatzos,
+    // SofZmanShmaMGA72MinutesZmanis,
+    // SofZmanShmaMGA90Minutes,
+    // SofZmanShmaMGA90MinutesToFixedLocalChatzos,
+    // SofZmanShmaMGA90MinutesZmanis,
+    // SofZmanShmaMGA96Minutes,
+    // SofZmanShmaMGA96MinutesZmanis,
+    // SofZmanTfila2HoursBeforeChatzos,
+    // SofZmanTfilaAteretTorah,
+    // SofZmanTfilaBaalHatanya,
+    SofZmanTfilaGRA,
+    // SofZmanTfilaGRASunriseToFixedLocalChatzos,
+    SofZmanTfilaMGA,
+    // SofZmanTfilaMGA120Minutes,
+    // SofZmanTfilaMGA16Point1Degrees,
+    // SofZmanTfilaMGA18Degrees,
+    // SofZmanTfilaMGA19Point8Degrees,
+    // SofZmanTfilaMGA72Minutes,
+    // SofZmanTfilaMGA72MinutesZmanis,
+    // SofZmanTfilaMGA90Minutes,
+    // SofZmanTfilaMGA90MinutesZmanis,
+    // SofZmanTfilaMGA96Minutes,
+    // SofZmanTfilaMGA96MinutesZmanis,
+    // TchilasZmanKidushLevana3Days,
+    // TchilasZmanKidushLevana7Days,
+    Tzais,
+    // Tzais16Point1Degrees,
+    // Tzais18Degrees,
+    // Tzais19Point8Degrees,
+    // Tzais50,
+    // Tzais60,
+    Tzais72,
+    // Tzais72Zmanis,
+    // Tzais90,
+    // Tzais90Zmanis,
+    // Tzais96,
+    // Tzais96Zmanis,
+    // TzaisAteretTorah,
+    // TzaisBaalHatanya,
+    // TzaisGeonim3Point7Degrees,
+    // TzaisGeonim3Point8Degrees,
+    // TzaisGeonim4Point37Degrees,
+    // TzaisGeonim4Point61Degrees,
+    // TzaisGeonim4Point8Degrees,
+    // TzaisGeonim5Point88Degrees,
+    // TzaisGeonim5Point95Degrees,
+    // TzaisGeonim6Point45Degrees,
+    // TzaisGeonim7Point083Degrees,
+    // TzaisGeonim7Point67Degrees,
+    // TzaisGeonim8Point5Degrees,
+    // TzaisGeonim9Point3Degrees,
+    // TzaisGeonim9Point75Degrees,
+}
 
-// impl Zman {
-//     pub fn values() -> [Zman; 14] {
-//         [
-//             Zman::PlagHamincha,
-//             Zman::MinchaKetana,
-//             Zman::MinchaGedola,
-//             Zman::Tzais,
-//             Zman::AlosHashachar,
-//             Zman::Alos72,
-//             Zman::Chatzos,
-//             Zman::ChatzosAsHalfDay,
-//             Zman::SofZmanShmaGRA,
-//             Zman::SofZmanShmaMGA,
-//             Zman::Tzais72,
-//             Zman::CandleLighting,
-//             Zman::SofZmanTfilaGRA,
-//             Zman::SofZmanTfilaMGA,
-//         ]
-//     }
-//     pub fn calculate<Tz: TimeZone>(
-//         &self,
-//         zman: &impl ZmanimCalendarTrait<Tz>,
-//     ) -> Option<DateTime<Tz>> {
-//         let astro = zman.get_astronomical_calendar();
-//         return match self {
-//             Zman::PlagHamincha => {
-//                 zman._get_plag_hamincha(astro.get_sunrise(), astro.get_sunset()?, true)
-//             }
-//             Zman::MinchaKetana => {
-//                 zman._get_mincha_ketana(astro.get_sunrise(), astro.get_sunset()?, true)
-//             }
-//             Zman::MinchaGedola => {
-//                 zman._get_mincha_gedola(astro.get_sunrise(), astro.get_sunset()?, true)
-//             }
-//             Zman::Tzais => astro.get_sunset_offset_by_degrees(_ZENITH_8_POINT_5),
-//             Zman::AlosHashachar => astro.get_sunrise_offset_by_degrees(_ZENITH_16_POINT_1),
-//             Zman::Alos72 => astro
-//                 .get_sunrise()
-//                 .map(|sunrise| sunrise - Duration::minutes(72)),
-//             Zman::Chatzos => {
-//                 if zman.get_use_astronomical_chatzos() {
-//                     astro.get_sun_transit()
-//                 } else {
-//                     Zman::ChatzosAsHalfDay
-//                         .calculate(zman)
-//                         .or(astro.get_sun_transit())
-//                 }
-//             }
-//             Zman::ChatzosAsHalfDay => {
-//                 let sunrise = astro.get_sea_level_sunrise()?;
-//                 let sunset = astro.get_sea_level_sunset()?;
-//                 astro.get_sun_transit_from_times(sunrise, sunset)
-//             }
-//             Zman::SofZmanShmaGRA => {
-//                 zman._get_sof_zman_shma(astro.get_sunrise()?, astro.get_sunset(), true)
-//             }
-//             Zman::SofZmanShmaMGA => zman._get_sof_zman_shma(
-//                 Zman::Alos72.calculate(zman)?,
-//                 Zman::Tzais72.calculate(zman),
-//                 true,
-//             ),
-//             Zman::Tzais72 => astro
-//                 .get_sunset()
-//                 .map(|sunset| sunset + Duration::minutes(72)),
-//             Zman::CandleLighting => astro
-//                 .get_sea_level_sunset()
-//                 .map(|sunset| sunset - zman.get_candle_lighting_offset()),
-//             Zman::SofZmanTfilaGRA => {
-//                 zman._get_sof_zman_tfila(astro.get_sunrise()?, astro.get_sunset(), true)
-//             }
-//             Zman::SofZmanTfilaMGA => zman._get_sof_zman_tfila(
-//                 Zman::Alos72.calculate(zman)?,
-//                 Zman::Tzais72.calculate(zman),
-//                 true,
-//             ),
-//             // _ => None,
-//         };
-//     }
-// }
+impl Zman {
+    pub fn values() -> [Zman; 14] {
+        [
+            Zman::PlagHamincha,
+            Zman::MinchaKetana,
+            Zman::MinchaGedola,
+            Zman::Tzais,
+            Zman::AlosHashachar,
+            Zman::Alos72,
+            Zman::Chatzos,
+            Zman::ChatzosAsHalfDay,
+            Zman::SofZmanShmaGRA,
+            Zman::SofZmanShmaMGA,
+            Zman::Tzais72,
+            Zman::CandleLighting,
+            Zman::SofZmanTfilaGRA,
+            Zman::SofZmanTfilaMGA,
+        ]
+    }
+}

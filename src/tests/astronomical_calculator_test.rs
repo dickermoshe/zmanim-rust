@@ -1,10 +1,11 @@
-use j4rs::{Instance, InvocationArg, Jvm};
-
+use crate::defmt::DefmtFormatTrait;
 use crate::{
     astronomical_calculator::AstronomicalCalculatorTrait,
     geolocation::GeoLocationTrait,
     tests::test_utils::{dt_to_java_calendar, geolocation_to_java_geolocation},
 };
+use core::fmt::Debug;
+use j4rs::{Instance, InvocationArg, Jvm};
 
 pub struct JavaAstronomicalCalculator<'a> {
     pub jvm: &'a Jvm,
@@ -19,8 +20,20 @@ impl<'a> JavaAstronomicalCalculator<'a> {
     }
 }
 
-impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomicalCalculator<'a> {
-    fn get_utc_noon<Tz: chrono::TimeZone>(&self, date_time: &chrono::DateTime<Tz>, geo_location: &G) -> f64 {
+impl<'a> Debug for JavaAstronomicalCalculator<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "JavaAstronomicalCalculator",)
+    }
+}
+
+impl<'a> DefmtFormatTrait for JavaAstronomicalCalculator<'a> {}
+
+impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
+    fn get_utc_noon<Tz: chrono::TimeZone, G: GeoLocationTrait>(
+        &self,
+        date_time: &chrono::DateTime<Tz>,
+        geo_location: &G,
+    ) -> f64 {
         let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
         let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
         let result = self
@@ -37,7 +50,11 @@ impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomica
         self.jvm.to_rust::<f64>(result).unwrap()
     }
 
-    fn get_utc_midnight<Tz: chrono::TimeZone>(&self, date_time: &chrono::DateTime<Tz>, geo_location: &G) -> f64 {
+    fn get_utc_midnight<Tz: chrono::TimeZone, G: GeoLocationTrait>(
+        &self,
+        date_time: &chrono::DateTime<Tz>,
+        geo_location: &G,
+    ) -> f64 {
         let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
         let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
         let result = self
@@ -54,7 +71,7 @@ impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomica
         self.jvm.to_rust::<f64>(result).unwrap()
     }
 
-    fn get_utc_sunrise<Tz: chrono::TimeZone>(
+    fn get_utc_sunrise<Tz: chrono::TimeZone, G: GeoLocationTrait>(
         &self,
         date_time: &chrono::DateTime<Tz>,
         geo_location: &G,
@@ -84,7 +101,7 @@ impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomica
         if java_result.is_nan() { None } else { Some(java_result) }
     }
 
-    fn get_utc_sunset<Tz: chrono::TimeZone>(
+    fn get_utc_sunset<Tz: chrono::TimeZone, G: GeoLocationTrait>(
         &self,
         date_time: &chrono::DateTime<Tz>,
         geo_location: &G,
@@ -114,7 +131,11 @@ impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomica
         if java_result.is_nan() { None } else { Some(java_result) }
     }
 
-    fn get_solar_elevation<Tz: chrono::TimeZone>(&self, date_time: &chrono::DateTime<Tz>, geo_location: &G) -> f64 {
+    fn get_solar_elevation<Tz: chrono::TimeZone, G: GeoLocationTrait>(
+        &self,
+        date_time: &chrono::DateTime<Tz>,
+        geo_location: &G,
+    ) -> f64 {
         let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
         let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
         let result = self
@@ -131,7 +152,11 @@ impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomica
         self.jvm.to_rust::<f64>(result).unwrap()
     }
 
-    fn get_solar_azimuth<Tz: chrono::TimeZone>(&self, date_time: &chrono::DateTime<Tz>, geo_location: &G) -> f64 {
+    fn get_solar_azimuth<Tz: chrono::TimeZone, G: GeoLocationTrait>(
+        &self,
+        date_time: &chrono::DateTime<Tz>,
+        geo_location: &G,
+    ) -> f64 {
         let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
         let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
         let result = self
@@ -146,6 +171,12 @@ impl<'a, G: GeoLocationTrait> AstronomicalCalculatorTrait<G> for JavaAstronomica
             )
             .unwrap();
         self.jvm.to_rust::<f64>(result).unwrap()
+    }
+}
+
+impl<'a> Clone for JavaAstronomicalCalculator<'a> {
+    fn clone(&self) -> Self {
+        unreachable!();
     }
 }
 

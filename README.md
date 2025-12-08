@@ -4,6 +4,12 @@ TODO: Get changes merged into kosher jav
 TODO: Remove unwrap from this entire codebase
 TODO: Add no_std tests
 TODO: document that users shold create with datetimes that have 0:00 oclock
+ensure we can compile no_Std
+
+- Include a changelog
+- restrict the submodules to a specific tag
+- Update github description
+Compare datetimes without converting to timestamps in tests
 
 # Jew-SDK
 

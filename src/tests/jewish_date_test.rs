@@ -1,8 +1,10 @@
+use icu_calendar::{Date, Gregorian};
 use j4rs::{Instance, InvocationArg, Jvm, Null};
 
 use crate::{
     constants::JewishMonth,
-    jewish_date::{JewishDateTrait, MoladData},
+    defmt::DefmtFormatTrait,
+    jewish_date::{InternalJewishDateTrait, JewishDateTrait, MoladData},
 };
 
 pub struct JavaJewishDate<'a> {
@@ -10,6 +12,7 @@ pub struct JavaJewishDate<'a> {
     pub instance: Instance,
 }
 
+impl<'a> DefmtFormatTrait for JavaJewishDate<'a> {}
 impl<'a> JavaJewishDate<'a> {
     pub fn from_gregorian_date(jvm: &'a Jvm, year: i32, month: i32, day: i32) -> Option<Self> {
         let year_arg = InvocationArg::try_from(year).unwrap().into_primitive().unwrap();
@@ -24,27 +27,29 @@ impl<'a> JavaJewishDate<'a> {
                 &[InvocationArg::from(local_date)],
             )
             .ok();
-        if instance.is_none() {
-            return None;
-        }
+        instance.as_ref()?;
         let instance = instance.unwrap();
         Some(Self { jvm, instance })
     }
     pub fn from_jewish_date(jvm: &'a Jvm, year: i32, month: JewishMonth, day: i32) -> Option<Self> {
-        let year_arg = InvocationArg::try_from(year as i32).unwrap().into_primitive().unwrap();
+        let year_arg = InvocationArg::try_from(year).unwrap().into_primitive().unwrap();
         let month_arg = InvocationArg::try_from(month as i32).unwrap().into_primitive().unwrap();
-        let day_arg = InvocationArg::try_from(day as i32).unwrap().into_primitive().unwrap();
+        let day_arg = InvocationArg::try_from(day).unwrap().into_primitive().unwrap();
         let instance = jvm
             .create_instance(
                 "com.kosherjava.zmanim.hebrewcalendar.JewishDate",
                 &[year_arg, month_arg, day_arg],
             )
             .ok();
-        if instance.is_none() {
-            return None;
-        }
+        instance.as_ref()?;
         let instance = instance.unwrap();
         Some(Self { jvm, instance })
+    }
+}
+
+impl<'a> InternalJewishDateTrait for JavaJewishDate<'a> {
+    fn get_gregorian_date(&self) -> Date<Gregorian> {
+        unimplemented!("get_gregorian_date is not implemented in this test and should not be called");
     }
 }
 
@@ -54,8 +59,8 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getJewishYear", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<i32>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<i32>(java_result).unwrap()
     }
 
     fn get_jewish_month(&self) -> JewishMonth {
@@ -71,24 +76,24 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getJewishDayOfMonth", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<u8>(java_result).unwrap()
     }
     fn get_gregorian_year(&self) -> i32 {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getGregorianYear", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<i32>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<i32>(java_result).unwrap()
     }
     fn get_gregorian_month(&self) -> u8 {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getGregorianMonth", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<u8>(java_result).unwrap()
     }
 
     fn get_gregorian_day_of_month(&self) -> u8 {
@@ -96,8 +101,8 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getGregorianDayOfMonth", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<u8>(java_result).unwrap()
     }
 
     fn get_day_of_week(&self) -> crate::constants::DayOfWeek {
@@ -114,8 +119,8 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "isJewishLeapYear", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<bool>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<bool>(java_result).unwrap()
     }
 
     fn get_days_in_jewish_year(&self) -> i32 {
@@ -123,8 +128,8 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getDaysInJewishYear", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<i32>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<i32>(java_result).unwrap()
     }
 
     fn get_days_in_jewish_month(&self) -> u8 {
@@ -132,8 +137,7 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getDaysInJewishMonth", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result
+        self.jvm.to_rust::<u8>(java_result).unwrap()
     }
 
     fn is_cheshvan_long(&self) -> bool {
@@ -141,8 +145,8 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "isCheshvanLong", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<bool>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<bool>(java_result).unwrap()
     }
 
     fn is_kislev_short(&self) -> bool {
@@ -150,8 +154,8 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "isKislevShort", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<bool>(java_result).unwrap();
-        java_result
+
+        self.jvm.to_rust::<bool>(java_result).unwrap()
     }
 
     fn get_cheshvan_kislev_kviah(&self) -> crate::constants::YearLengthType {
@@ -168,8 +172,7 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getDaysSinceStartOfJewishYear", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<i32>(java_result).unwrap();
-        java_result
+        self.jvm.to_rust::<i32>(java_result).unwrap()
     }
 
     fn get_chalakim_since_molad_tohu(&self) -> i64 {
@@ -177,8 +180,7 @@ impl<'a> JewishDateTrait for JavaJewishDate<'a> {
             .jvm
             .invoke(&self.instance, "getChalakimSinceMoladTohu", InvocationArg::empty())
             .unwrap();
-        let java_result = self.jvm.to_rust::<i64>(java_result).unwrap();
-        java_result
+        self.jvm.to_rust::<i64>(java_result).unwrap()
     }
     #[allow(refining_impl_trait)]
     fn get_molad_as_date(&self) -> Option<JavaJewishDate<'a>> {
@@ -314,12 +316,11 @@ mod tests {
         );
 
         assert_eq!(jewish_date.get_molad(), java_date.get_molad());
-        if !is_recursive {
-            if let (Some(jewish_molad), Some(java_molad)) =
+        if !is_recursive
+            && let (Some(jewish_molad), Some(java_molad)) =
                 (jewish_date.get_molad_as_date(), java_date.get_molad_as_date())
-            {
-                compare_jewish_date_against_java(&jewish_molad, &java_molad, true);
-            }
+        {
+            compare_jewish_date_against_java(&jewish_molad, &java_molad, true);
         }
     }
 
@@ -333,7 +334,7 @@ mod tests {
                 date_time.day() as u8,
             );
             let java_date = JavaJewishDate::from_gregorian_date(
-                &jvm,
+                jvm,
                 date_time.year() as i32,
                 date_time.month() as i32,
                 date_time.day() as i32,
@@ -347,15 +348,14 @@ mod tests {
                 date_time.month(),
                 date_time.day()
             );
-            if jewish_date.is_some() && java_date.is_some() {
-                Some((jewish_date.unwrap(), java_date.unwrap()))
-            } else {
-                None
-            }
+            return match (jewish_date, java_date) {
+                (Some(jewish_date), Some(java_date)) => Some((jewish_date, java_date)),
+                _ => None,
+            };
         } else {
             let (year, month, day) = random_hebrew_date(rng);
-            let jewish_date = JewishDate::from_hebrew_date(year, month.into(), day);
-            let java_date = JavaJewishDate::from_jewish_date(&jvm, year, month, day as i32);
+            let jewish_date = JewishDate::from_jewish_date(year, month, day);
+            let java_date = JavaJewishDate::from_jewish_date(jvm, year, month, day as i32);
             // Ensure both are null or not null
             assert_eq!(
                 jewish_date.is_some(),
@@ -365,11 +365,10 @@ mod tests {
                 month,
                 day
             );
-            if jewish_date.is_some() && java_date.is_some() {
-                Some((jewish_date.unwrap(), java_date.unwrap()))
-            } else {
-                None
-            }
+            return match (jewish_date, java_date) {
+                (Some(jewish_date), Some(java_date)) => Some((jewish_date, java_date)),
+                _ => None,
+            };
         }
     }
 
