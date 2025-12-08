@@ -139,8 +139,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             JewishDate::from_gregorian_date(start.year(), start.month() as u8, start.day() as u8)?.get_jewish_year();
         let end_year =
             JewishDate::from_gregorian_date(end.year(), end.month() as u8, end.day() as u8)?.get_jewish_year();
-        println!("RUST: start_year: {}", start_year);
-        println!("RUST: end_year: {}", end_year);
+
         let mut special_days = 0u64;
         for i in start_year..=end_year {
             // Create new calendar instances for each year
@@ -784,9 +783,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     fn get_daf_yomi_yerushalmi(&self) -> Option<YerushalmiDaf> {
         let requested_date = icu_to_naive(&self.jewish_date.get_gregorian_date())?;
 
-        println!("=== RUST get_daf_yomi_yerushalmi DEBUG ===");
-        println!("RUST: Requested date: {:?}", requested_date);
-
         let milliseconds_since_epoch = requested_date.timestamp_millis();
         let mut tractate: i64 = 0;
         if self.get_yom_tov_index() == Some(JewishHoliday::YomKippur)
@@ -796,73 +792,37 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             return None;
         }
 
-        fn calc_next_cycle<N: AstronomicalCalculatorTrait>(
-            calendar: &JewishCalendar<N>,
-            start: DateTime<Utc>,
-        ) -> Option<DateTime<Utc>> {
-            let mut next_cycle = start.checked_add_days(Days::new(_YERUSHALMI_LENGTH - 1))?;
-            let special_days_in_cycle = calendar.get_num_of_special_days(start, next_cycle)?;
-            next_cycle = next_cycle.checked_add_days(Days::new(special_days_in_cycle))?;
-            Some(next_cycle)
-        }
-
         let mut prev_cycle = _YERUSHALMI_DAF_YOMI_START_DAY;
-        let mut next_cycle = calc_next_cycle(self, prev_cycle)?;
+        let mut next_cycle = _YERUSHALMI_DAF_YOMI_START_DAY;
 
-        fn get_next_cycle<N: AstronomicalCalculatorTrait>(
-            calendar: &JewishCalendar<N>,
-            next_cycle: DateTime<Utc>,
-        ) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
-            let prev_cycle = next_cycle.checked_add_days(Days::new(1))?;
-            let next_cycle = calc_next_cycle(calendar, prev_cycle)?;
-            Some((prev_cycle, next_cycle))
-        }
-
-        println!("RUST: DAF_YOMI_START_DAY: {:?}", _YERUSHALMI_DAF_YOMI_START_DAY);
-        println!("RUST: YERUSHALMI_LENGTH: {}", _YERUSHALMI_LENGTH);
+        next_cycle = next_cycle.checked_add_days(Days::new(_YERUSHALMI_LENGTH - 1))?;
+        let special_days_in_cycle = self.get_num_of_special_days(prev_cycle, next_cycle)?;
+        next_cycle = next_cycle.checked_add_days(Days::new(special_days_in_cycle))?;
 
         while requested_date > next_cycle {
-            (prev_cycle, next_cycle) = get_next_cycle(self, next_cycle)?;
+            prev_cycle = next_cycle;
+            prev_cycle = prev_cycle.checked_add_days(Days::new(1))?;
+
+            next_cycle = next_cycle.checked_add_days(Days::new(_YERUSHALMI_LENGTH))?;
+            let special_days_in_cycle = self.get_num_of_special_days(prev_cycle, next_cycle)?;
+            next_cycle = next_cycle.checked_add_days(Days::new(special_days_in_cycle))?;
         }
 
-        println!(
-            "RUST: Found cycle: prev_cycle={:?}, next_cycle={:?}",
-            prev_cycle, next_cycle
-        );
-
         let daf_num = self.get_diff_between_days(prev_cycle, requested_date);
-        println!("RUST: Days from cycle start (daf_num): {}", daf_num);
 
         let special_days = self.get_num_of_special_days(prev_cycle, requested_date)?;
-        println!("RUST: Special days to subtract: {}", special_days);
 
         let total = if special_days > daf_num {
-            println!(
-                "RUST: Special days ({}) > daf_num ({}) - returning None",
-                special_days, daf_num
-            );
             return None;
         } else {
             daf_num - special_days
         };
         let mut total = total as i64;
-        println!("RUST: Total daf number in cycle: {}", total);
 
-        let original_total = total;
-        for (idx, blatt_count) in BLATT_PER_YERUSHALMI_TRACTATE.iter().enumerate() {
-            println!(
-                "RUST: Checking tractate {} with {} blatt, remaining total={}",
-                idx, blatt_count, total
-            );
+        for blatt_count in BLATT_PER_YERUSHALMI_TRACTATE.iter() {
             if total < *blatt_count as i64 {
                 let tractate: YerushalmiTractate = tractate.try_into().ok()?;
-                println!(
-                    "RUST: Found daf: tractate={:?} ({}), daf={}",
-                    tractate,
-                    tractate as i64,
-                    total + 1
-                );
-                println!("=== RUST END DEBUG ===\n");
+
                 return Some(YerushalmiDaf {
                     tractate,
                     daf_index: (total + 1) as i64,

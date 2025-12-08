@@ -838,7 +838,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_yerushalmi_daf_yomi_specific_case_jewish_date_5778_8_23() {
+    fn test_yerushalmi_daf_yomi_transition_date() {
         let jvm = init_jvm();
 
         // This is the specific failing case from the random test (Jewish date)
@@ -848,13 +848,6 @@ pub mod tests {
         let in_israel = true;
         let is_mukaf_choma = true;
         let use_modern_holidays = true;
-
-        println!("\n=== Testing specific Yerushalmi Daf Yomi case (Jewish date) ===");
-        println!("Jewish Date: {}-{:?}-{}", jewish_year, jewish_month, jewish_day);
-        println!(
-            "in_israel: {}, is_mukaf_choma: {}, use_modern_holidays: {}",
-            in_israel, is_mukaf_choma, use_modern_holidays
-        );
 
         let rust_calendar = JewishCalendar::from_jewish_date(
             jewish_year,
@@ -881,11 +874,6 @@ pub mod tests {
 
         let rust_result = rust_calendar.get_daf_yomi_yerushalmi();
         let java_result = java_calendar.get_daf_yomi_yerushalmi();
-
-        println!("\nResults:");
-        println!("Rust: {:?}", rust_result);
-        println!("Java: {:?}", java_result);
-        panic!();
 
         assert_eq!(
             rust_result, java_result,
