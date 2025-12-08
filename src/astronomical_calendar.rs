@@ -41,49 +41,32 @@ pub trait AstronomicalCalendarTrait<Tz: TimeZone, G: GeoLocationTrait, N: Astron
     fn get_date_time(&self) -> &DateTime<Tz>;
     fn get_geo_location(&self) -> &G;
     fn get_calculator(&self) -> &N;
-
     fn get_sunrise(&self) -> Option<DateTime<Tz>>;
-
     fn get_sea_level_sunrise(&self) -> Option<DateTime<Tz>>;
-
     fn get_begin_civil_twilight(&self) -> Option<DateTime<Tz>>;
-
     fn get_begin_nautical_twilight(&self) -> Option<DateTime<Tz>>;
-
     fn get_begin_astronomical_twilight(&self) -> Option<DateTime<Tz>>;
-
     fn get_sunset(&self) -> Option<DateTime<Tz>>;
-
     fn get_sea_level_sunset(&self) -> Option<DateTime<Tz>>;
-
     fn get_end_civil_twilight(&self) -> Option<DateTime<Tz>>;
-
     fn get_end_nautical_twilight(&self) -> Option<DateTime<Tz>>;
-
     fn get_end_astronomical_twilight(&self) -> Option<DateTime<Tz>>;
-
     fn get_sunrise_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>>;
     fn get_sunset_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>>;
-
     fn get_utc_sunrise(&self, zenith: f64) -> Option<f64>;
-
     fn get_utc_sea_level_sunrise(&self, zenith: f64) -> Option<f64>;
-
     fn get_utc_sunset(&self, zenith: f64) -> Option<f64>;
-
     fn get_utc_sea_level_sunset(&self, zenith: f64) -> Option<f64>;
-
     fn get_temporal_hour(&self) -> Option<Duration>;
     fn get_temporal_hour_from_times(&self, start_of_day: &DateTime<Tz>, end_of_day: &DateTime<Tz>) -> Option<Duration>;
-
     fn get_sun_transit(&self) -> Option<DateTime<Tz>>;
-
     fn get_solar_midnight(&self) -> Option<DateTime<Tz>>;
-
-    fn get_sun_transit_from_times(&self, start_of_day: DateTime<Tz>, end_of_day: DateTime<Tz>) -> Option<DateTime<Tz>>;
-
+    fn get_sun_transit_from_times(
+        &self,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: &DateTime<Tz>,
+    ) -> Option<DateTime<Tz>>;
     fn get_date_from_time(&self, calculated_time: f64, solar_event: _SolarEvent) -> Option<DateTime<Tz>>;
-
     fn get_local_mean_time(&self, hours: f64) -> Option<DateTime<Tz>>;
 }
 
@@ -238,9 +221,13 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait> Astronom
         self.get_date_from_time(midnight, _SolarEvent::Midnight)
     }
 
-    fn get_sun_transit_from_times(&self, start_of_day: DateTime<Tz>, end_of_day: DateTime<Tz>) -> Option<DateTime<Tz>> {
-        let temporal_hour = self.get_temporal_hour_from_times(&start_of_day, &end_of_day)?;
-        Some(start_of_day + (temporal_hour * 6))
+    fn get_sun_transit_from_times(
+        &self,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: &DateTime<Tz>,
+    ) -> Option<DateTime<Tz>> {
+        let temporal_hour = self.get_temporal_hour_from_times(start_of_day, end_of_day)?;
+        Some(start_of_day.clone() + (temporal_hour * 6))
     }
 
     fn get_date_from_time(&self, mut calculated_time: f64, solar_event: _SolarEvent) -> Option<DateTime<Tz>> {

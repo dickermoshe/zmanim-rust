@@ -1,7 +1,9 @@
+//! An implementation of the GeoLocationTrait which delegates to the GeoLocation class in Java
+//! This is used to test our Rust implementation against the Java implementation.
 use crate::{
     defmt::DefmtFormatTrait,
     geolocation::{GeoLocation, GeoLocationTrait},
-    tests::test_utils::{RandomValue, dt_to_java_calendar, random_random_value, tz_to_java_timezone},
+    tests::{DoubleType, dt_to_java_calendar, rng_double_type, tz_to_java_timezone},
 };
 use chrono::Duration;
 use chrono_tz::{TZ_VARIANTS, Tz};
@@ -50,33 +52,15 @@ impl<'a> JavaGeoLocation<'a> {
 
 impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
     fn get_latitude(&self) -> f64 {
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(&self.instance, "getLatitude", InvocationArg::empty())
-                    .unwrap(),
-            )
-            .unwrap()
+        unimplemented!("get_latitude is not implemented in this test and should not be called");
     }
 
     fn get_longitude(&self) -> f64 {
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(&self.instance, "getLongitude", InvocationArg::empty())
-                    .unwrap(),
-            )
-            .unwrap()
+        unimplemented!("get_longitude is not implemented in this test and should not be called");
     }
 
     fn get_elevation(&self) -> f64 {
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(&self.instance, "getElevation", InvocationArg::empty())
-                    .unwrap(),
-            )
-            .unwrap()
+        unimplemented!("get_elevation is not implemented in this test and should not be called");
     }
 
     fn get_rhumb_line_distance(&self, location: &JavaGeoLocation<'_>) -> f64 {
@@ -186,36 +170,36 @@ pub fn random_geolocations<'a, Rng: rand::Rng>(
     jvm: &'a Jvm,
     rng: &mut Rng,
 ) -> Option<(GeoLocation, JavaGeoLocation<'a>)> {
-    let random_value = random_random_value(rng);
+    let random_value = rng_double_type(rng);
     let latitude = match random_value {
-        RandomValue::Normal => rng.gen_range(-90.0..=90.0),
-        RandomValue::OutOfRange => {
+        DoubleType::Finite => rng.gen_range(-90.0..=90.0),
+        DoubleType::OutOfRange => {
             if rng.gen_bool(0.5) {
                 -91.0
             } else {
                 91.0
             }
         }
-        RandomValue::Infinite => f64::INFINITY,
-        RandomValue::Nan => f64::NAN,
+        DoubleType::Infinite => f64::INFINITY,
+        DoubleType::Nan => f64::NAN,
     };
     let longitude = match random_value {
-        RandomValue::Normal => rng.gen_range(-180.0..=180.0),
-        RandomValue::OutOfRange => {
+        DoubleType::Finite => rng.gen_range(-180.0..=180.0),
+        DoubleType::OutOfRange => {
             if rng.gen_bool(0.5) {
                 -181.0
             } else {
                 181.0
             }
         }
-        RandomValue::Infinite => f64::INFINITY,
-        RandomValue::Nan => f64::NAN,
+        DoubleType::Infinite => f64::INFINITY,
+        DoubleType::Nan => f64::NAN,
     };
     let elevation = match random_value {
-        RandomValue::Normal => rng.gen_range(0.0..=1000.0),
-        RandomValue::OutOfRange => -1.0,
-        RandomValue::Infinite => f64::INFINITY,
-        RandomValue::Nan => f64::NAN,
+        DoubleType::Finite => rng.gen_range(0.0..=1000.0),
+        DoubleType::OutOfRange => -1.0,
+        DoubleType::Infinite => f64::INFINITY,
+        DoubleType::Nan => f64::NAN,
     };
     let tz = TZ_VARIANTS[rng.gen_range(0..TZ_VARIANTS.len())];
     // DIFF: Java cannot handle the some timezones
@@ -244,10 +228,80 @@ pub fn random_geolocations<'a, Rng: rand::Rng>(
 }
 
 mod jni_tests {
-    use crate::tests::test_utils::{
+    use crate::tests::{
         DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_duration, assert_almost_equal_f64,
         assert_almost_equal_f64_option, init_jvm, random_date_time,
     };
+
+    fn compare_geolocations<'a>(
+        rust_geolocation: &GeoLocation,
+        java_geolocation: &JavaGeoLocation<'a>,
+        other_rust_geolocation: &GeoLocation,
+        other_java_geolocation: &JavaGeoLocation<'a>,
+        date: &chrono::DateTime<chrono_tz::Tz>,
+    ) {
+        assert_almost_equal_f64(
+            rust_geolocation.get_rhumb_line_distance(other_rust_geolocation),
+            java_geolocation.get_rhumb_line_distance(other_java_geolocation),
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getRhumbLineDistance of {:?} against {:?}",
+                rust_geolocation, other_rust_geolocation
+            ),
+        );
+        assert_almost_equal_f64(
+            rust_geolocation.get_rhumb_line_bearing(other_rust_geolocation),
+            java_geolocation.get_rhumb_line_bearing(other_java_geolocation),
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getRhumbLineBearing of {:?} against {:?}",
+                rust_geolocation, other_rust_geolocation
+            ),
+        );
+        assert_almost_equal_f64_option(
+            &rust_geolocation.get_geodesic_initial_bearing(other_rust_geolocation),
+            &java_geolocation.get_geodesic_initial_bearing(other_java_geolocation),
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getGeodesicInitialBearing of {:?} against {:?}",
+                rust_geolocation, other_rust_geolocation
+            ),
+        );
+        assert_almost_equal_f64_option(
+            &rust_geolocation.get_geodesic_final_bearing(other_rust_geolocation),
+            &java_geolocation.get_geodesic_final_bearing(other_java_geolocation),
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getGeodesicFinalBearing of {:?} against {:?}",
+                rust_geolocation, other_rust_geolocation
+            ),
+        );
+        assert_almost_equal_f64_option(
+            &rust_geolocation.get_geodesic_distance(other_rust_geolocation),
+            &java_geolocation.get_geodesic_distance(other_java_geolocation),
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getGeodesicDistance of {:?} against {:?}",
+                rust_geolocation, other_rust_geolocation
+            ),
+        );
+        assert_almost_equal_duration(
+            &rust_geolocation.get_local_mean_time_offset(date),
+            &java_geolocation.get_local_mean_time_offset(date),
+            10, // 10 milliseconds
+            &format!(
+                "getLocalMeanTimeOffset of {:?} against {:?}",
+                rust_geolocation, other_rust_geolocation
+            ),
+        );
+        assert_eq!(
+            rust_geolocation.get_antimeridian_adjustment(date),
+            java_geolocation.get_antimeridian_adjustment(date),
+            "getAntimeridianAdjustment of {:?} against {:?}",
+            rust_geolocation,
+            other_rust_geolocation
+        );
+    }
 
     use super::*;
 
@@ -261,84 +315,12 @@ mod jni_tests {
                 && let Some((other_geo_location, other_java_geo_location)) = random_geolocations(&jvm, &mut rng)
             {
                 let date = random_date_time(&mut rng, other_java_geo_location.timezone);
-
-                // Test All Methods
-                assert_almost_equal_f64(
-                    geo_location.get_latitude(),
-                    java_geo_location.get_latitude(),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getLatitude of {:?}", geo_location),
-                );
-                assert_almost_equal_f64(
-                    geo_location.get_longitude(),
-                    java_geo_location.get_longitude(),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getLongitude of {:?}", geo_location),
-                );
-                assert_almost_equal_f64(
-                    geo_location.get_elevation(),
-                    java_geo_location.get_elevation(),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getElevation of {:?}", geo_location),
-                );
-                assert_almost_equal_f64(
-                    geo_location.get_rhumb_line_distance(&other_geo_location),
-                    java_geo_location.get_rhumb_line_distance(&other_java_geo_location),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getRhumbLineDistance of {:?} against {:?}",
-                        geo_location, other_geo_location
-                    ),
-                );
-                assert_almost_equal_f64(
-                    geo_location.get_rhumb_line_bearing(&other_geo_location),
-                    java_geo_location.get_rhumb_line_bearing(&other_java_geo_location),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getRhumbLineBearing of {:?} against {:?}",
-                        geo_location, other_geo_location
-                    ),
-                );
-                assert_almost_equal_f64_option(
-                    &geo_location.get_geodesic_initial_bearing(&other_geo_location),
-                    &java_geo_location.get_geodesic_initial_bearing(&other_java_geo_location),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getGeodesicInitialBearing of {:?} against {:?}",
-                        geo_location, other_geo_location
-                    ),
-                );
-                assert_almost_equal_f64_option(
-                    &geo_location.get_geodesic_final_bearing(&other_geo_location),
-                    &java_geo_location.get_geodesic_final_bearing(&other_java_geo_location),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getGeodesicFinalBearing of {:?} against {:?}",
-                        geo_location, other_geo_location
-                    ),
-                );
-                assert_almost_equal_f64_option(
-                    &geo_location.get_geodesic_distance(&other_geo_location),
-                    &java_geo_location.get_geodesic_distance(&other_java_geo_location),
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getGeodesicDistance of {:?} against {:?}",
-                        geo_location, other_geo_location
-                    ),
-                );
-                assert_almost_equal_duration(
-                    &geo_location.get_local_mean_time_offset(&date),
-                    &java_geo_location.get_local_mean_time_offset(&date),
-                    10, // 10 milliseconds
-                    &format!("getLocalMeanTimeOffset of {:?} against {:?}", geo_location, date),
-                );
-
-                assert_eq!(
-                    geo_location.get_antimeridian_adjustment(&date),
-                    java_geo_location.get_antimeridian_adjustment(&date),
-                    "getAntimeridianAdjustment of {:?} against {:?}",
-                    geo_location,
-                    date
+                compare_geolocations(
+                    &geo_location,
+                    &java_geo_location,
+                    &other_geo_location,
+                    &other_java_geo_location,
+                    &date,
                 );
                 ran_once = true;
             }

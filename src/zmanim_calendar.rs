@@ -45,8 +45,8 @@ pub trait ZmanimCalendarTrait<
     fn get_zman(&self, zman: &Zman) -> Option<DateTime<Tz>>;
     fn get_half_day_based_zman_from_times(
         &self,
-        start_of_half_day: DateTime<Tz>,
-        end_of_half_day: DateTime<Tz>,
+        start_of_half_day: &DateTime<Tz>,
+        end_of_half_day: &DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>>;
     fn get_half_day_based_shaah_zmanis_from_times(
@@ -56,71 +56,71 @@ pub trait ZmanimCalendarTrait<
     ) -> Option<Duration>;
     fn get_shaah_zmanis_based_zman_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: &DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>>;
 
     fn get_sof_zman_shma_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: Option<&DateTime<Tz>>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>>;
 
     fn get_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>>;
 
     fn get_sof_zman_tfila_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: Option<&DateTime<Tz>>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>>;
 
     fn get_mincha_gedola_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>>;
 
     fn get_plag_hamincha_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>>;
 
     fn get_samuch_le_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>>;
     fn get_sof_zman_kidush_levana_15_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>>;
     fn get_sof_zman_kidush_levana_between_moldos_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>>;
     fn get_tchilas_zman_kidush_levana_3_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>>;
     fn get_tchilas_zman_kidush_levana_7_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>>;
 }
 
@@ -144,8 +144,8 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 {
     fn get_tchilas_zman_kidush_levana_7_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let jewish_calendar = self._get_jewish_calendar()?;
         if jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 4
@@ -160,8 +160,8 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_sof_zman_kidush_levana_15_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let jewish_calendar = self._get_jewish_calendar()?;
         if jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 11
@@ -175,8 +175,8 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_tchilas_zman_kidush_levana_3_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let mut jewish_calendar = self._get_jewish_calendar()?;
         if jewish_calendar.get_jewish_date().get_jewish_day_of_month() > 5
@@ -213,8 +213,8 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_sof_zman_kidush_levana_between_moldos_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let jewish_calendar = self._get_jewish_calendar()?;
         if jewish_calendar.get_jewish_date().get_jewish_day_of_month() < 11
@@ -256,15 +256,15 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_half_day_based_zman_from_times(
         &self,
-        start_of_half_day: DateTime<Tz>,
-        end_of_half_day: DateTime<Tz>,
+        start_of_half_day: &DateTime<Tz>,
+        end_of_half_day: &DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>> {
-        let shaah_zmanis = self.get_half_day_based_shaah_zmanis_from_times(&start_of_half_day, &end_of_half_day)?;
+        let shaah_zmanis = self.get_half_day_based_shaah_zmanis_from_times(start_of_half_day, end_of_half_day)?;
         if hours >= 0.0 {
-            Some(start_of_half_day + lossy_multiply_duration(shaah_zmanis, hours))
+            Some(start_of_half_day.clone() + lossy_multiply_duration(shaah_zmanis, hours))
         } else {
-            Some(end_of_half_day + lossy_multiply_duration(shaah_zmanis, hours))
+            Some(end_of_half_day.clone() + lossy_multiply_duration(shaah_zmanis, hours))
         }
     }
 
@@ -278,25 +278,25 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_shaah_zmanis_based_zman_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: &DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>> {
         let shaah_zmanis = self
             .astronomical_calendar
-            .get_temporal_hour_from_times(&start_of_day, &end_of_day)?;
+            .get_temporal_hour_from_times(start_of_day, end_of_day)?;
 
-        Some(start_of_day + lossy_multiply_duration(shaah_zmanis, hours))
+        Some(start_of_day.clone() + lossy_multiply_duration(shaah_zmanis, hours))
     }
 
     fn get_sof_zman_shma_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: Option<&DateTime<Tz>>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.use_astronomical_chatzos_for_other_zmanim && synchronous {
-            self.get_half_day_based_zman_from_times(start_of_day, self.get_zman(&Zman::Chatzos)?, 3.0)
+            self.get_half_day_based_zman_from_times(start_of_day, &self.get_zman(&Zman::Chatzos)?, 3.0)
         } else {
             self.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day?, 3.0)
         }
@@ -304,12 +304,12 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_mincha_gedola_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.use_astronomical_chatzos_for_other_zmanim && synchronous {
-            self.get_half_day_based_zman_from_times(self.get_zman(&Zman::Chatzos)?, end_of_day, 0.5)
+            self.get_half_day_based_zman_from_times(&self.get_zman(&Zman::Chatzos)?, end_of_day, 0.5)
         } else {
             self.get_shaah_zmanis_based_zman_from_times(start_of_day?, end_of_day, 6.5)
         }
@@ -328,24 +328,24 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
     }
     fn get_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.use_astronomical_chatzos_for_other_zmanim && synchronous {
-            self.get_half_day_based_zman_from_times(self.get_zman(&Zman::Chatzos)?, end_of_day, 3.5)
+            self.get_half_day_based_zman_from_times(&self.get_zman(&Zman::Chatzos)?, end_of_day, 3.5)
         } else {
             self.get_shaah_zmanis_based_zman_from_times(start_of_day?, end_of_day, 9.5)
         }
     }
     fn get_sof_zman_tfila_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: Option<&DateTime<Tz>>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.use_astronomical_chatzos_for_other_zmanim && synchronous {
-            self.get_half_day_based_zman_from_times(start_of_day, self.get_zman(&Zman::Chatzos)?, 4.0)
+            self.get_half_day_based_zman_from_times(start_of_day, &self.get_zman(&Zman::Chatzos)?, 4.0)
         } else {
             self.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day?, 4.0)
         }
@@ -353,12 +353,12 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_samuch_le_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.use_astronomical_chatzos_for_other_zmanim && synchronous {
-            self.get_half_day_based_zman_from_times(self.get_zman(&Zman::Chatzos)?, end_of_day, 3.0)
+            self.get_half_day_based_zman_from_times(&self.get_zman(&Zman::Chatzos)?, end_of_day, 3.0)
         } else {
             self.get_shaah_zmanis_based_zman_from_times(start_of_day?, end_of_day, 9.0)
         }
@@ -366,12 +366,12 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
     fn get_plag_hamincha_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         if self.use_astronomical_chatzos_for_other_zmanim && synchronous {
-            self.get_half_day_based_zman_from_times(self.get_zman(&Zman::Chatzos)?, end_of_day, 4.75)
+            self.get_half_day_based_zman_from_times(&self.get_zman(&Zman::Chatzos)?, end_of_day, 4.75)
         } else {
             self.get_shaah_zmanis_based_zman_from_times(start_of_day?, end_of_day, 10.75)
         }
@@ -380,9 +380,15 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
     fn get_zman(&self, zman: &Zman) -> Option<DateTime<Tz>> {
         let astro = self.get_astronomical_calendar();
         match zman {
-            Zman::PlagHamincha => self.get_plag_hamincha_from_times(astro.get_sunrise(), astro.get_sunset()?, true),
-            Zman::MinchaKetana => self.get_mincha_ketana_from_times(astro.get_sunrise(), astro.get_sunset()?, true),
-            Zman::MinchaGedola => self.get_mincha_gedola_from_times(astro.get_sunrise(), astro.get_sunset()?, true),
+            Zman::PlagHamincha => {
+                self.get_plag_hamincha_from_times(astro.get_sunrise().as_ref(), &astro.get_sunset()?, true)
+            }
+            Zman::MinchaKetana => {
+                self.get_mincha_ketana_from_times(astro.get_sunrise().as_ref(), &astro.get_sunset()?, true)
+            }
+            Zman::MinchaGedola => {
+                self.get_mincha_gedola_from_times(astro.get_sunrise().as_ref(), &astro.get_sunset()?, true)
+            }
             Zman::Tzais => astro.get_sunset_offset_by_degrees(_ZENITH_8_POINT_5),
             Zman::AlosHashachar => astro.get_sunrise_offset_by_degrees(_ZENITH_16_POINT_1),
             Zman::Alos72 => astro.get_sunrise().map(|sunrise| sunrise - Duration::minutes(72)),
@@ -396,20 +402,28 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
             Zman::ChatzosAsHalfDay => {
                 let sunrise = astro.get_sea_level_sunrise()?;
                 let sunset = astro.get_sea_level_sunset()?;
-                astro.get_sun_transit_from_times(sunrise, sunset)
+                astro.get_sun_transit_from_times(&sunrise, &sunset)
             }
-            Zman::SofZmanShmaGRA => self.get_sof_zman_shma_from_times(astro.get_sunrise()?, astro.get_sunset(), true),
-            Zman::SofZmanShmaMGA => {
-                self.get_sof_zman_shma_from_times(self.get_zman(&Zman::Alos72)?, self.get_zman(&Zman::Tzais72), true)
+            Zman::SofZmanShmaGRA => {
+                self.get_sof_zman_shma_from_times(&astro.get_sunrise()?, astro.get_sunset().as_ref(), true)
             }
+            Zman::SofZmanShmaMGA => self.get_sof_zman_shma_from_times(
+                &self.get_zman(&Zman::Alos72)?,
+                self.get_zman(&Zman::Tzais72).as_ref(),
+                true,
+            ),
             Zman::Tzais72 => astro.get_sunset().map(|sunset| sunset + Duration::minutes(72)),
             Zman::CandleLighting => astro
                 .get_sea_level_sunset()
                 .map(|sunset| sunset - self.get_candle_lighting_offset()),
-            Zman::SofZmanTfilaGRA => self.get_sof_zman_tfila_from_times(astro.get_sunrise()?, astro.get_sunset(), true),
-            Zman::SofZmanTfilaMGA => {
-                self.get_sof_zman_tfila_from_times(self.get_zman(&Zman::Alos72)?, self.get_zman(&Zman::Tzais72), true)
+            Zman::SofZmanTfilaGRA => {
+                self.get_sof_zman_tfila_from_times(&astro.get_sunrise()?, astro.get_sunset().as_ref(), true)
             }
+            Zman::SofZmanTfilaMGA => self.get_sof_zman_tfila_from_times(
+                &self.get_zman(&Zman::Alos72)?,
+                self.get_zman(&Zman::Tzais72).as_ref(),
+                true,
+            ),
         }
     }
 }
@@ -481,8 +495,8 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
     fn _get_molad_based_time(
         &self,
         utc_molad_based_time: DateTime<Utc>,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
         techila: bool,
     ) -> Option<DateTime<Tz>> {
         let molad_based_time = self._localized_datetime(utc_molad_based_time);
@@ -553,7 +567,7 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
 
 //     use std::f64;
 
-//     use crate::test_utils::jni::{
+//     use crate::jni::{
 //         DEFAULT_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64_option,
 //         assert_almost_equal_i64_option, create_zmanim_calendars, init_jvm,
 //     };

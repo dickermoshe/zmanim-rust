@@ -1,10 +1,11 @@
+//! An implementation of the AstronomicalCalculatorTrait which delegates to the NOAACalculator class in Java
+//! This is used to test our Rust implementation against the Java implementation.
 use crate::defmt::DefmtFormatTrait;
 use crate::{
     astronomical_calculator::AstronomicalCalculatorTrait,
     geolocation::GeoLocationTrait,
-    tests::test_utils::{dt_to_java_calendar, geolocation_to_java_geolocation},
+    tests::{dt_to_java_calendar, geolocation_to_java_geolocation},
 };
-use core::fmt::Debug;
 use j4rs::{Instance, InvocationArg, Jvm};
 
 pub struct JavaAstronomicalCalculator<'a> {
@@ -17,12 +18,6 @@ impl<'a> JavaAstronomicalCalculator<'a> {
             .create_instance("com.kosherjava.zmanim.util.NOAACalculator", InvocationArg::empty())
             .unwrap();
         Self { jvm, instance }
-    }
-}
-
-impl<'a> Debug for JavaAstronomicalCalculator<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "JavaAstronomicalCalculator",)
     }
 }
 
@@ -186,19 +181,98 @@ mod jni_tests {
 
     use crate::{
         astronomical_calculator::NOAACalculator,
+        geolocation::GeoLocation,
         tests::{
-            geolocation_test::random_geolocations,
-            test_utils::{
-                DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64,
-                assert_almost_equal_f64_option, init_jvm, random_date_time, random_zenith,
-            },
+            DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64, assert_almost_equal_f64_option,
+            geolocation_test::{JavaGeoLocation, random_geolocations},
+            init_jvm, random_date_time, random_zenith,
         },
     };
 
     use super::*;
 
+    fn compare_astronomical_calculators<'a>(
+        rust_calculator: &NOAACalculator,
+        java_calculator: &JavaAstronomicalCalculator<'a>,
+        date: &chrono::DateTime<chrono_tz::Tz>,
+        rust_geo_location: &GeoLocation,
+        java_geo_location: &JavaGeoLocation<'a>,
+        zenith: f64,
+        adjust_for_elevation: bool,
+    ) {
+        // Test get_utc_noon
+        let rust_noon = rust_calculator.get_utc_noon(date, rust_geo_location);
+        let java_noon = java_calculator.get_utc_noon(date, java_geo_location);
+        assert_almost_equal_f64(
+            rust_noon,
+            java_noon,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!("getUtcNoon of {:?} at {:?}", rust_geo_location, date),
+        );
+        // Test get_utc_midnight
+        let rust_midnight = rust_calculator.get_utc_midnight(date, rust_geo_location);
+        let java_midnight = java_calculator.get_utc_midnight(date, java_geo_location);
+        assert_almost_equal_f64(
+            rust_midnight,
+            java_midnight,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!("getUtcMidnight of {:?} at {:?}", rust_geo_location, date),
+        );
+        // Test get_utc_sunrise
+        let rust_sunrise = rust_calculator.get_utc_sunrise(date, rust_geo_location, zenith, adjust_for_elevation);
+        let java_sunrise = java_calculator.get_utc_sunrise(date, java_geo_location, zenith, adjust_for_elevation);
+        assert_almost_equal_f64_option(
+            &rust_sunrise,
+            &java_sunrise,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getUtcSunrise of {:?} at {:?} with zenith {} and adjust_for_elevation {}",
+                rust_geo_location, date, zenith, adjust_for_elevation
+            ),
+        );
+        // Test get_utc_sunset
+        let rust_sunset = rust_calculator.get_utc_sunset(date, rust_geo_location, zenith, adjust_for_elevation);
+        let java_sunset = java_calculator.get_utc_sunset(date, java_geo_location, zenith, adjust_for_elevation);
+        assert_almost_equal_f64_option(
+            &rust_sunset,
+            &java_sunset,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!(
+                "getUtcSunset of {:?} at {:?} with zenith {} and adjust_for_elevation {}",
+                rust_geo_location, date, zenith, adjust_for_elevation
+            ),
+        );
+        // Test get_solar_elevation
+        let rust_elevation = rust_calculator.get_solar_elevation(date, rust_geo_location);
+        let java_elevation = java_calculator.get_solar_elevation(date, java_geo_location);
+        assert_almost_equal_f64(
+            rust_elevation,
+            java_elevation,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!("getSolarElevation of {:?} at {:?}", rust_geo_location, date),
+        );
+        // Test get_solar_azimuth
+        let rust_azimuth = rust_calculator.get_solar_azimuth(date, rust_geo_location);
+        let java_azimuth = java_calculator.get_solar_azimuth(date, java_geo_location);
+        assert_almost_equal_f64(
+            rust_azimuth,
+            java_azimuth,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!("getSolarAzimuth of {:?} at {:?}", rust_geo_location, date),
+        );
+        // Test get_solar_elevation
+        let rust_elevation = rust_calculator.get_solar_elevation(date, rust_geo_location);
+        let java_elevation = java_calculator.get_solar_elevation(date, java_geo_location);
+        assert_almost_equal_f64(
+            rust_elevation,
+            java_elevation,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!("getSolarElevation of {:?} at {:?}", rust_geo_location, date),
+        );
+    }
+
     #[test]
-    fn test_random_astronomical_calculator() {
+    fn test_random_astronomical_calculator_against_java() {
         let jvm = init_jvm();
         let mut rng = rand::thread_rng();
         let mut ran_once = false;
@@ -208,77 +282,17 @@ mod jni_tests {
         for _ in 0..DEFAULT_TEST_ITERATIONS {
             if let Some((geo_location, java_geo_location)) = random_geolocations(&jvm, &mut rng) {
                 let date = random_date_time(&mut rng, java_geo_location.timezone);
-
-                // Test get_utc_noon
-                let rust_noon = calculator.get_utc_noon(&date, &geo_location);
-                let java_noon = java_calculator.get_utc_noon(&date, &java_geo_location);
-                assert_almost_equal_f64(
-                    rust_noon,
-                    java_noon,
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getUtcNoon of {:?} at {:?}", geo_location, date),
-                );
-
-                // Test get_utc_midnight
-                let rust_midnight = calculator.get_utc_midnight(&date, &geo_location);
-                let java_midnight = java_calculator.get_utc_midnight(&date, &java_geo_location);
-                assert_almost_equal_f64(
-                    rust_midnight,
-                    java_midnight,
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getUtcMidnight of {:?} at {:?}", geo_location, date),
-                );
-
-                // Test get_utc_sunrise
                 let zenith = random_zenith(&mut rng);
                 let adjust_for_elevation = rng.gen_bool(0.5);
-                let rust_sunrise = calculator.get_utc_sunrise(&date, &geo_location, zenith, adjust_for_elevation);
-                let java_sunrise =
-                    java_calculator.get_utc_sunrise(&date, &java_geo_location, zenith, adjust_for_elevation);
-                assert_almost_equal_f64_option(
-                    &rust_sunrise,
-                    &java_sunrise,
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getUtcSunrise of {:?} at {:?} with zenith {} and adjust_for_elevation {}",
-                        geo_location, date, zenith, adjust_for_elevation
-                    ),
+                compare_astronomical_calculators(
+                    &calculator,
+                    &java_calculator,
+                    &date,
+                    &geo_location,
+                    &java_geo_location,
+                    zenith,
+                    adjust_for_elevation,
                 );
-
-                // Test get_utc_sunset
-                let rust_sunset = calculator.get_utc_sunset(&date, &geo_location, zenith, adjust_for_elevation);
-                let java_sunset =
-                    java_calculator.get_utc_sunset(&date, &java_geo_location, zenith, adjust_for_elevation);
-                assert_almost_equal_f64_option(
-                    &rust_sunset,
-                    &java_sunset,
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!(
-                        "getUtcSunset of {:?} at {:?} with zenith {} and adjust_for_elevation {}",
-                        geo_location, date, zenith, adjust_for_elevation
-                    ),
-                );
-
-                // Test get_solar_elevation
-                let rust_elevation = calculator.get_solar_elevation(&date, &geo_location);
-                let java_elevation = java_calculator.get_solar_elevation(&date, &java_geo_location);
-                assert_almost_equal_f64(
-                    rust_elevation,
-                    java_elevation,
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getSolarElevation of {:?} at {:?}", geo_location, date),
-                );
-
-                // Test get_solar_azimuth
-                let rust_azimuth = calculator.get_solar_azimuth(&date, &geo_location);
-                let java_azimuth = java_calculator.get_solar_azimuth(&date, &java_geo_location);
-                assert_almost_equal_f64(
-                    rust_azimuth,
-                    java_azimuth,
-                    DEFAULT_F64_TEST_EPSILON,
-                    &format!("getSolarAzimuth of {:?} at {:?}", geo_location, date),
-                );
-
                 ran_once = true;
             }
         }

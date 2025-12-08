@@ -268,10 +268,58 @@ mod tests {
 
     use crate::{
         jewish_date::JewishDate,
-        tests::test_utils::{DEFAULT_TEST_ITERATIONS, init_jvm, random_date_time, random_hebrew_date},
+        tests::{DEFAULT_TEST_ITERATIONS, init_jvm, random_date_time, random_hebrew_date},
     };
 
     use super::*;
+
+    fn random_jewish_date<'a>(jvm: &'a Jvm, rng: &mut impl Rng) -> Option<(JewishDate, JavaJewishDate<'a>)> {
+        let use_gregorian_date = rng.gen_bool(0.5);
+        if use_gregorian_date {
+            let date_time = random_date_time(rng, chrono_tz::Tz::UTC);
+            let jewish_date = JewishDate::from_gregorian_date(
+                date_time.year() as i32,
+                date_time.month() as u8,
+                date_time.day() as u8,
+            );
+            let java_date = JavaJewishDate::from_gregorian_date(
+                jvm,
+                date_time.year() as i32,
+                date_time.month() as i32,
+                date_time.day() as i32,
+            );
+            // Ensure both are null or not null
+            assert_eq!(
+                jewish_date.is_some(),
+                java_date.is_some(),
+                "gregorian date: year: {}, month: {}, day: {}",
+                date_time.year(),
+                date_time.month(),
+                date_time.day()
+            );
+            return match (jewish_date, java_date) {
+                (Some(jewish_date), Some(java_date)) => Some((jewish_date, java_date)),
+                _ => None,
+            };
+        } else {
+            let (year, month, day) = random_hebrew_date(rng);
+            let jewish_date = JewishDate::from_jewish_date(year, month, day);
+            let java_date = JavaJewishDate::from_jewish_date(jvm, year, month, day as i32);
+            // Ensure both are null or not null
+            assert_eq!(
+                jewish_date.is_some(),
+                java_date.is_some(),
+                "hebrew date: year: {}, month: {:?}, day: {}",
+                year,
+                month,
+                day
+            );
+            return match (jewish_date, java_date) {
+                (Some(jewish_date), Some(java_date)) => Some((jewish_date, java_date)),
+                _ => None,
+            };
+        }
+    }
 
     fn compare_jewish_date_against_java(
         jewish_date: &impl JewishDateTrait,
@@ -321,54 +369,6 @@ mod tests {
                 (jewish_date.get_molad_as_date(), java_date.get_molad_as_date())
         {
             compare_jewish_date_against_java(&jewish_molad, &java_molad, true);
-        }
-    }
-
-    fn random_jewish_date<'a>(jvm: &'a Jvm, rng: &mut impl Rng) -> Option<(JewishDate, JavaJewishDate<'a>)> {
-        let use_gregorian_date = rng.gen_bool(0.5);
-        if use_gregorian_date {
-            let date_time = random_date_time(rng, chrono_tz::Tz::UTC);
-            let jewish_date = JewishDate::from_gregorian_date(
-                date_time.year() as i32,
-                date_time.month() as u8,
-                date_time.day() as u8,
-            );
-            let java_date = JavaJewishDate::from_gregorian_date(
-                jvm,
-                date_time.year() as i32,
-                date_time.month() as i32,
-                date_time.day() as i32,
-            );
-            // Ensure both are null or not null
-            assert_eq!(
-                jewish_date.is_some(),
-                java_date.is_some(),
-                "gregorian date: year: {}, month: {}, day: {}",
-                date_time.year(),
-                date_time.month(),
-                date_time.day()
-            );
-            return match (jewish_date, java_date) {
-                (Some(jewish_date), Some(java_date)) => Some((jewish_date, java_date)),
-                _ => None,
-            };
-        } else {
-            let (year, month, day) = random_hebrew_date(rng);
-            let jewish_date = JewishDate::from_jewish_date(year, month, day);
-            let java_date = JavaJewishDate::from_jewish_date(jvm, year, month, day as i32);
-            // Ensure both are null or not null
-            assert_eq!(
-                jewish_date.is_some(),
-                java_date.is_some(),
-                "hebrew date: year: {}, month: {:?}, day: {}",
-                year,
-                month,
-                day
-            );
-            return match (jewish_date, java_date) {
-                (Some(jewish_date), Some(java_date)) => Some((jewish_date, java_date)),
-                _ => None,
-            };
         }
     }
 

@@ -7,8 +7,8 @@ use crate::{
     defmt::DefmtFormatTrait,
     geolocation::GeoLocation,
     tests::{
-        astronomical_calendar_test::JavaAstronomicalCalendar,
-        test_utils::{dt_to_java_calendar, dt_to_java_date, geolocation_to_java_geolocation},
+        astronomical_calendar_test::JavaAstronomicalCalendar, dt_to_java_calendar, dt_to_java_date,
+        geolocation_to_java_geolocation,
     },
     zmanim_calendar::{InternalZmanimCalendarTrait, ZmanimCalendarTrait},
 };
@@ -161,12 +161,12 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_half_day_based_zman_from_times(
         &self,
-        start_of_half_day: DateTime<Tz>,
-        end_of_half_day: DateTime<Tz>,
+        start_of_half_day: &DateTime<Tz>,
+        end_of_half_day: &DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>> {
-        let java_start = dt_to_java_date(self.jvm, &start_of_half_day);
-        let java_end = dt_to_java_date(self.jvm, &end_of_half_day);
+        let java_start = dt_to_java_date(self.jvm, start_of_half_day);
+        let java_end = dt_to_java_date(self.jvm, end_of_half_day);
         let java_result = self
             .jvm
             .invoke(
@@ -202,12 +202,12 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_shaah_zmanis_based_zman_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: &DateTime<Tz>,
         hours: f64,
     ) -> Option<DateTime<Tz>> {
-        let java_start = dt_to_java_date(self.jvm, &start_of_day);
-        let java_end = dt_to_java_date(self.jvm, &end_of_day);
+        let java_start = dt_to_java_date(self.jvm, start_of_day);
+        let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_result = self
             .jvm
             .invoke(
@@ -225,13 +225,13 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_sof_zman_shma_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: Option<&DateTime<Tz>>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
-        let java_start = dt_to_java_date(self.jvm, &start_of_day);
+        let java_start = dt_to_java_date(self.jvm, start_of_day);
         let java_end = if let Some(end_of_day) = end_of_day {
-            InvocationArg::from(dt_to_java_date(self.jvm, &end_of_day))
+            InvocationArg::from(dt_to_java_date(self.jvm, end_of_day))
         } else {
             InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
         };
@@ -249,16 +249,16 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
-            InvocationArg::from(dt_to_java_date(self.jvm, &start_of_day))
+            InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
             InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
         };
-        let java_end = dt_to_java_date(self.jvm, &end_of_day);
+        let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_synchronous = InvocationArg::try_from(synchronous).unwrap().into_primitive().unwrap();
         let java_result = self
             .jvm
@@ -273,13 +273,13 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_sof_zman_tfila_from_times(
         &self,
-        start_of_day: DateTime<Tz>,
-        end_of_day: Option<DateTime<Tz>>,
+        start_of_day: &DateTime<Tz>,
+        end_of_day: Option<&DateTime<Tz>>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
-        let java_start = dt_to_java_date(self.jvm, &start_of_day);
+        let java_start = dt_to_java_date(self.jvm, start_of_day);
         let java_end = if let Some(end_of_day) = end_of_day {
-            InvocationArg::from(dt_to_java_date(self.jvm, &end_of_day))
+            InvocationArg::from(dt_to_java_date(self.jvm, end_of_day))
         } else {
             InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
         };
@@ -297,16 +297,16 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_mincha_gedola_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
-            InvocationArg::from(dt_to_java_date(self.jvm, &start_of_day))
+            InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
             InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
         };
-        let java_end = dt_to_java_date(self.jvm, &end_of_day);
+        let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_synchronous = InvocationArg::try_from(synchronous).unwrap().into_primitive().unwrap();
         let java_result = self
             .jvm
@@ -321,16 +321,16 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_plag_hamincha_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
-            InvocationArg::from(dt_to_java_date(self.jvm, &start_of_day))
+            InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
             InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
         };
-        let java_end = dt_to_java_date(self.jvm, &end_of_day);
+        let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_synchronous = InvocationArg::try_from(synchronous).unwrap().into_primitive().unwrap();
         let java_result = self
             .jvm
@@ -345,16 +345,16 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_samuch_le_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<DateTime<Tz>>,
-        end_of_day: DateTime<Tz>,
+        start_of_day: Option<&DateTime<Tz>>,
+        end_of_day: &DateTime<Tz>,
         synchronous: bool,
     ) -> Option<DateTime<Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
-            InvocationArg::from(dt_to_java_date(self.jvm, &start_of_day))
+            InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
             InvocationArg::try_from(Null::Of("java.util.Date")).unwrap()
         };
-        let java_end = dt_to_java_date(self.jvm, &end_of_day);
+        let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_synchronous = InvocationArg::try_from(synchronous).unwrap().into_primitive().unwrap();
         let java_result = self
             .jvm
@@ -369,8 +369,8 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_sof_zman_kidush_levana_15_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
@@ -391,8 +391,8 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_sof_zman_kidush_levana_between_moldos_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
@@ -417,8 +417,8 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_tchilas_zman_kidush_levana_3_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
@@ -443,8 +443,8 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator, Java
 
     fn get_tchilas_zman_kidush_levana_7_days_from_times(
         &self,
-        alos: &Option<DateTime<Tz>>,
-        tzais: &Option<DateTime<Tz>>,
+        alos: Option<&DateTime<Tz>>,
+        tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
@@ -522,16 +522,14 @@ mod jni_tests {
     use crate::{
         astronomical_calendar::{AstronomicalCalendar, AstronomicalCalendarTrait},
         tests::{
-            geolocation_test::random_geolocations,
-            test_utils::{
-                DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, assert_almost_equal_f64_option,
-                assert_almost_equal_i64_option, init_jvm, random_date_time,
-            },
+            DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, DoubleType, assert_almost_equal_f64_option,
+            geolocation_test::random_geolocations, init_jvm, random_date_time, rng_double_type,
         },
         zmanim_calendar::ZmanimCalendar,
     };
 
     use super::*;
+
     #[allow(clippy::type_complexity)]
     fn create_zmanim_calendars<'a>(
         jvm: &'a Jvm,
@@ -573,674 +571,235 @@ mod jni_tests {
 
         Some((rust_calendar, java_calendar))
     }
-
-    #[test]
-    fn test_get_zman_against_java() {
-        let jvm = init_jvm();
-        let zman_variants = [
-            Zman::AlosHashachar,
-            Zman::Alos72,
-            Zman::Chatzos,
-            Zman::ChatzosAsHalfDay,
-            Zman::MinchaGedola,
-            Zman::MinchaKetana,
-            Zman::PlagHamincha,
-            Zman::SofZmanShmaGRA,
-            Zman::SofZmanShmaMGA,
-            Zman::SofZmanTfilaGRA,
-            Zman::SofZmanTfilaMGA,
-            Zman::Tzais,
-            Zman::Tzais72,
-            Zman::CandleLighting,
-        ];
-
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            for zman in &zman_variants {
-                let test_case = create_zmanim_calendars(&jvm);
-                if test_case.is_none() {
-                    continue;
-                }
-                ran = true;
-                let (rust_calendar, java_calendar) = test_case.unwrap();
-
-                let result = rust_calendar.get_zman(zman).map(|d| d.timestamp_millis());
-                let java_result = java_calendar.get_zman(zman).map(|d| d.timestamp_millis());
-
-                assert_almost_equal_i64_option(
-                    &result,
-                    &java_result,
-                    50,
-                    &format!("get_zman({:?}) against java with calendar {:?}", zman, rust_calendar),
-                );
-            }
-        }
-        assert!(ran, "No test cases were ran");
-    }
-
-    #[test]
-    fn test_get_percent_of_shaah_zmanis_from_degrees_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let degrees = rand::thread_rng().gen_range(-100.0..=100.0);
-            let sunset = rand::thread_rng().gen_bool(0.5);
-
-            let result = rust_calendar.get_percent_of_shaah_zmanis_from_degrees(degrees, sunset);
-            let java_result = java_calendar.get_percent_of_shaah_zmanis_from_degrees(degrees, sunset);
-
-            assert_almost_equal_f64_option(
-                &result,
-                &java_result,
-                DEFAULT_F64_TEST_EPSILON,
-                &format!("get_percent_of_shaah_zmanis_from_degrees({}, {})", degrees, sunset),
+    #[allow(clippy::too_many_arguments)]
+    fn compare_zmanim_calendars<'a>(
+        rust_calendar: &ZmanimCalendar<
+            chrono_tz::Tz,
+            GeoLocation,
+            NOAACalculator,
+            AstronomicalCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>,
+        >,
+        java_calendar: &JavaZmanimCalendar<'a, chrono_tz::Tz>,
+        degrees: f64,
+        sunset: bool,
+        start_of_half_day: &DateTime<chrono_tz::Tz>,
+        end_of_half_day: &DateTime<chrono_tz::Tz>,
+        start_of_day_option: Option<&DateTime<chrono_tz::Tz>>,
+        start_of_day: &DateTime<chrono_tz::Tz>,
+        end_of_day_option: Option<&DateTime<chrono_tz::Tz>>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
+        synchronous: bool,
+        hours: f64,
+        alos: Option<&DateTime<chrono_tz::Tz>>,
+        tzais: Option<&DateTime<chrono_tz::Tz>>,
+    ) {
+        for zman in Zman::values() {
+            let result = rust_calendar.get_zman(&zman);
+            let java_result = java_calendar.get_zman(&zman);
+            assert_eq!(
+                result, java_result,
+                "get_zman({:?}) against java with calendar {:?}",
+                zman, rust_calendar
             );
         }
-        assert!(ran, "No test cases were run");
+        let result = rust_calendar.get_percent_of_shaah_zmanis_from_degrees(degrees, sunset);
+        let java_result = java_calendar.get_percent_of_shaah_zmanis_from_degrees(degrees, sunset);
+        assert_almost_equal_f64_option(
+            &result,
+            &java_result,
+            DEFAULT_F64_TEST_EPSILON,
+            &format!("get_percent_of_shaah_zmanis_from_degrees({}, {})", degrees, sunset),
+        );
+
+        let result = rust_calendar.get_shaah_zmanis_gra();
+        let java_result = java_calendar.get_shaah_zmanis_gra();
+        assert_eq!(
+            result, java_result,
+            "get_shaah_zmanis_gra against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_shaah_zmanis_mga();
+        let java_result = java_calendar.get_shaah_zmanis_mga();
+        assert_eq!(
+            result, java_result,
+            "get_shaah_zmanis_mga against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_half_day_based_zman_from_times(start_of_half_day, end_of_half_day, hours);
+        let java_result = java_calendar.get_half_day_based_zman_from_times(start_of_half_day, end_of_half_day, hours);
+        assert_eq!(
+            result, java_result,
+            "get_half_day_based_zman_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_half_day_based_shaah_zmanis_from_times(start_of_half_day, end_of_half_day);
+        let java_result = java_calendar.get_half_day_based_shaah_zmanis_from_times(start_of_half_day, end_of_half_day);
+        assert_eq!(
+            result, java_result,
+            "get_half_day_based_shaah_zmanis_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours);
+        let java_result = java_calendar.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours);
+        assert_eq!(
+            result, java_result,
+            "get_shaah_zmanis_based_zman_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_sof_zman_shma_from_times(start_of_day, end_of_day_option, synchronous);
+        let java_result = java_calendar.get_sof_zman_shma_from_times(start_of_day, end_of_day_option, synchronous);
+        assert_eq!(
+            result, java_result,
+            "get_sof_zman_shma_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
+        let java_result = java_calendar.get_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
+        assert_eq!(
+            result, java_result,
+            "get_mincha_ketana_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_sof_zman_tfila_from_times(start_of_day, end_of_day_option, synchronous);
+        let java_result = java_calendar.get_sof_zman_tfila_from_times(start_of_day, end_of_day_option, synchronous);
+        assert_eq!(
+            result, java_result,
+            "get_sof_zman_tfila_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_mincha_gedola_from_times(start_of_day_option, end_of_day, synchronous);
+        let java_result = java_calendar.get_mincha_gedola_from_times(start_of_day_option, end_of_day, synchronous);
+        assert_eq!(
+            result, java_result,
+            "get_mincha_gedola_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+        let result = rust_calendar.get_plag_hamincha_from_times(start_of_day_option, end_of_day, synchronous);
+        let java_result = java_calendar.get_plag_hamincha_from_times(start_of_day_option, end_of_day, synchronous);
+        assert_eq!(
+            result, java_result,
+            "get_plag_hamincha_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_samuch_le_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
+        let java_result =
+            java_calendar.get_samuch_le_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
+        assert_eq!(
+            result, java_result,
+            "get_samuch_le_mincha_ketana_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_sof_zman_kidush_levana_15_days_from_times(alos, tzais);
+        let java_result = java_calendar.get_sof_zman_kidush_levana_15_days_from_times(alos, tzais);
+        assert_eq!(
+            result, java_result,
+            "get_sof_zman_kidush_levana_15_days_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_sof_zman_kidush_levana_between_moldos_from_times(alos, tzais);
+        let java_result = java_calendar.get_sof_zman_kidush_levana_between_moldos_from_times(alos, tzais);
+        assert_eq!(
+            result, java_result,
+            "get_sof_zman_kidush_levana_between_moldos_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_tchilas_zman_kidush_levana_3_days_from_times(alos, tzais);
+        let java_result = java_calendar.get_tchilas_zman_kidush_levana_3_days_from_times(alos, tzais);
+        assert_eq!(
+            result, java_result,
+            "get_tchilas_zman_kidush_levana_3_days_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+
+        let result = rust_calendar.get_tchilas_zman_kidush_levana_7_days_from_times(alos, tzais);
+        let java_result = java_calendar.get_tchilas_zman_kidush_levana_7_days_from_times(alos, tzais);
+        assert_eq!(
+            result, java_result,
+            "get_tchilas_zman_kidush_levana_7_days_from_times against java with calendar {:?}",
+            rust_calendar
+        );
+    }
+    // Takes a range of ints and uses a one between and applies as seconds to the datetime
+    fn appy_random_offset_to_datetime<Tz: TimeZone>(rng: &mut impl Rng, datetime: &DateTime<Tz>) -> DateTime<Tz> {
+        datetime.clone() + Duration::seconds(rng.gen_range(-(72 * 3600)..=(72 * 3600)))
     }
 
-    #[test]
-    fn test_get_shaah_zmanis_gra_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let result = rust_calendar.get_shaah_zmanis_gra().map(|d| d.num_milliseconds());
-            let java_result = java_calendar.get_shaah_zmanis_gra().map(|d| d.num_milliseconds());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_shaah_zmanis_gra");
+    // Takes a range of ints and uses a one between and applies as seconds to the datetime
+    fn appy_random_offset_to_option_datetime<Tz: TimeZone>(
+        rng: &mut impl Rng,
+        datetime: &DateTime<Tz>,
+    ) -> Option<DateTime<Tz>> {
+        if rng.gen_bool(0.1) {
+            None
+        } else {
+            Some(datetime.clone() + Duration::seconds(rng.gen_range(-(72 * 3600)..=(72 * 3600))))
         }
-        assert!(ran, "No test cases were run");
     }
 
     #[test]
-    fn test_get_shaah_zmanis_mga_against_java() {
+    fn test_compare_zmanim_calendars() {
         let jvm = init_jvm();
         let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let result = rust_calendar.get_shaah_zmanis_mga().map(|d| d.num_milliseconds());
-            let java_result = java_calendar.get_shaah_zmanis_mga().map(|d| d.num_milliseconds());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_shaah_zmanis_mga");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_half_day_based_zman_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_half_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_half_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_half_day.is_none() || end_of_half_day.is_none() {
-                continue;
-            }
-
-            let start_of_half_day = start_of_half_day.unwrap();
-            let end_of_half_day = end_of_half_day.unwrap();
-            let hours = rand::thread_rng().gen_range(-6.0..=6.0);
-
-            let result = rust_calendar
-                .get_half_day_based_zman_from_times(start_of_half_day, end_of_half_day, hours)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_half_day_based_zman_from_times(start_of_half_day, end_of_half_day, hours)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_half_day_based_zman_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_half_day_based_shaah_zmanis_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_half_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_half_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_half_day.is_none() || end_of_half_day.is_none() {
-                continue;
-            }
-
-            let start_of_half_day = start_of_half_day.unwrap();
-            let end_of_half_day = end_of_half_day.unwrap();
-
-            let result = rust_calendar
-                .get_half_day_based_shaah_zmanis_from_times(&start_of_half_day, &end_of_half_day)
-                .map(|d| d.num_milliseconds());
-            let java_result = java_calendar
-                .get_half_day_based_shaah_zmanis_from_times(&start_of_half_day, &end_of_half_day)
-                .map(|d| d.num_milliseconds());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_half_day_based_shaah_zmanis_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_shaah_zmanis_based_zman_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let hours = rand::thread_rng().gen_range(0.0..=12.0);
-
-            let result = rust_calendar
-                .get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_shaah_zmanis_based_zman_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_shma_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let synchronous = rand::thread_rng().gen_bool(0.5);
-            let end_of_day = if rand::thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(end_of_day)
-            };
-
-            let result = rust_calendar
-                .get_sof_zman_shma_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_sof_zman_shma_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_sof_zman_shma_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_tfila_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let synchronous = rand::thread_rng().gen_bool(0.5);
-            let end_of_day = if rand::thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(end_of_day)
-            };
-
-            let result = rust_calendar
-                .get_sof_zman_tfila_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_sof_zman_tfila_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_sof_zman_tfila_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_mincha_gedola_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let synchronous = rand::thread_rng().gen_bool(0.5);
-            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(start_of_day)
-            };
-
-            let result = rust_calendar
-                .get_mincha_gedola_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_mincha_gedola_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_mincha_gedola_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_mincha_ketana_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let synchronous = rand::thread_rng().gen_bool(0.5);
-            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(start_of_day)
-            };
-
-            let result = rust_calendar
-                .get_mincha_ketana_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_mincha_ketana_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_mincha_ketana_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_plag_hamincha_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let synchronous = rand::thread_rng().gen_bool(0.5);
-            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(start_of_day)
-            };
-
-            let result = rust_calendar
-                .get_plag_hamincha_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_plag_hamincha_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_plag_hamincha_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_samuch_le_mincha_ketana_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            ran = true;
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            let start_of_day = rust_calendar.get_astronomical_calendar().get_sunrise();
-            let end_of_day = rust_calendar.get_astronomical_calendar().get_sunset();
-
-            if start_of_day.is_none() || end_of_day.is_none() {
-                continue;
-            }
-
-            let start_of_day = start_of_day.unwrap();
-            let end_of_day = end_of_day.unwrap();
-            let synchronous = rand::thread_rng().gen_bool(0.5);
-            let start_of_day = if rand::thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(start_of_day)
-            };
-
-            let result = rust_calendar
-                .get_samuch_le_mincha_ketana_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_samuch_le_mincha_ketana_from_times(start_of_day, end_of_day, synchronous)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(&result, &java_result, 50, "get_samuch_le_mincha_ketana_from_times");
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_kidush_levana_15_days_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
+        let mut rng = rand::thread_rng();
         for _ in 0..DEFAULT_TEST_ITERATIONS {
             let test_case = create_zmanim_calendars(&jvm);
             if test_case.is_none() {
                 continue;
             }
             let (rust_calendar, java_calendar) = test_case.unwrap();
+            let degrees = rng.gen_range(-100.0..=100.0);
+            let sunset = rng.gen_bool(0.5);
 
-            // Get alos and tzais
-            let alos = rust_calendar.get_zman(&Zman::Alos72);
-            let tzais = rust_calendar.get_zman(&Zman::Tzais72);
-
-            // Add some random offset
-            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let alos = alos.map(|d| d + alos_offset);
-            let tzais = tzais.map(|d| d + tzais_offset);
-
-            // Randomly decide whether to pass None or Some
-            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
-            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
-            let alos_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &alos
-            } else {
-                &none_alos
-            };
-            let tzais_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &tzais
-            } else {
-                &none_tzais
-            };
-
-            ran = true;
-
-            let result = rust_calendar
-                .get_sof_zman_kidush_levana_15_days_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_sof_zman_kidush_levana_15_days_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(
-                &result,
-                &java_result,
-                50,
-                "get_sof_zman_kidush_levana_15_days_from_times",
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_sof_zman_kidush_levana_between_moldos_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
+            let date1 = rust_calendar.get_astronomical_calendar().get_sunrise();
+            let date2 = rust_calendar.get_astronomical_calendar().get_sunset();
+            if date1.is_none() || date2.is_none() {
                 continue;
             }
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            // Get alos and tzais
-            let alos = rust_calendar.get_zman(&Zman::Alos72);
-            let tzais = rust_calendar.get_zman(&Zman::Tzais72);
-
-            // Add some random offset
-            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let alos = alos.map(|d| d + alos_offset);
-            let tzais = tzais.map(|d| d + tzais_offset);
-
-            // Randomly decide whether to pass None or Some
-            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
-            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
-            let alos_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &alos
-            } else {
-                &none_alos
+            let start_of_half_day = date1.unwrap();
+            let end_of_half_day = date2.unwrap();
+            let start_of_half_day = appy_random_offset_to_datetime(&mut rng, &start_of_half_day);
+            let end_of_half_day = appy_random_offset_to_datetime(&mut rng, &end_of_half_day);
+            let start_of_day = appy_random_offset_to_datetime(&mut rng, &start_of_half_day);
+            let end_of_day = appy_random_offset_to_datetime(&mut rng, &end_of_half_day);
+            let start_of_day_option = appy_random_offset_to_option_datetime(&mut rng, &start_of_half_day);
+            let end_of_day_option = appy_random_offset_to_option_datetime(&mut rng, &end_of_half_day);
+            let synchronous = rng.gen_bool(0.5);
+            let hours = match rng_double_type(&mut rng) {
+                DoubleType::Finite => rng.gen_range(-25.0..=25.0),
+                DoubleType::Infinite => f64::INFINITY,
+                DoubleType::OutOfRange => -1.0,
+                DoubleType::Nan => f64::NAN,
             };
-            let tzais_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &tzais
-            } else {
-                &none_tzais
-            };
-
+            let alos = appy_random_offset_to_option_datetime(&mut rng, &start_of_half_day);
+            let tzais = appy_random_offset_to_option_datetime(&mut rng, &end_of_half_day);
             ran = true;
-
-            let result = rust_calendar
-                .get_sof_zman_kidush_levana_between_moldos_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_sof_zman_kidush_levana_between_moldos_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(
-                &result,
-                &java_result,
-                50,
-                "get_sof_zman_kidush_levana_between_moldos_from_times",
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_tchilas_zman_kidush_levana_3_days_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            // Get alos and tzais
-            let alos = rust_calendar.get_zman(&Zman::Alos72);
-            let tzais = rust_calendar.get_zman(&Zman::Tzais72);
-
-            // Add some random offset
-            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let alos = alos.map(|d| d + alos_offset);
-            let tzais = tzais.map(|d| d + tzais_offset);
-
-            // Randomly decide whether to pass None or Some
-            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
-            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
-            let alos_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &alos
-            } else {
-                &none_alos
-            };
-            let tzais_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &tzais
-            } else {
-                &none_tzais
-            };
-
-            ran = true;
-
-            let result = rust_calendar
-                .get_tchilas_zman_kidush_levana_3_days_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_tchilas_zman_kidush_levana_3_days_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(
-                &result,
-                &java_result,
-                50,
-                "get_tchilas_zman_kidush_levana_3_days_from_times",
-            );
-        }
-        assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_get_tchilas_zman_kidush_levana_7_days_from_times_against_java() {
-        let jvm = init_jvm();
-        let mut ran = false;
-        for _ in 0..DEFAULT_TEST_ITERATIONS {
-            let test_case = create_zmanim_calendars(&jvm);
-            if test_case.is_none() {
-                continue;
-            }
-            let (rust_calendar, java_calendar) = test_case.unwrap();
-
-            // Get alos and tzais
-            let alos = rust_calendar.get_zman(&Zman::Alos72);
-            let tzais = rust_calendar.get_zman(&Zman::Tzais72);
-
-            // Add some random offset
-            let alos_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let tzais_offset = Duration::minutes(rand::thread_rng().gen_range(-360..=360));
-            let alos = alos.map(|d| d + alos_offset);
-            let tzais = tzais.map(|d| d + tzais_offset);
-
-            // Randomly decide whether to pass None or Some
-            let none_alos: Option<DateTime<chrono_tz::Tz>> = None;
-            let none_tzais: Option<DateTime<chrono_tz::Tz>> = None;
-            let alos_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &alos
-            } else {
-                &none_alos
-            };
-            let tzais_for_test = if rand::thread_rng().gen_bool(0.5) {
-                &tzais
-            } else {
-                &none_tzais
-            };
-
-            ran = true;
-
-            let result = rust_calendar
-                .get_tchilas_zman_kidush_levana_7_days_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-            let java_result = java_calendar
-                .get_tchilas_zman_kidush_levana_7_days_from_times(alos_for_test, tzais_for_test)
-                .map(|d| d.timestamp_millis());
-
-            assert_almost_equal_i64_option(
-                &result,
-                &java_result,
-                50,
-                "get_tchilas_zman_kidush_levana_7_days_from_times",
+            compare_zmanim_calendars(
+                &rust_calendar,
+                &java_calendar,
+                degrees,
+                sunset,
+                &start_of_half_day,
+                &end_of_half_day,
+                start_of_day_option.as_ref(),
+                &start_of_day,
+                end_of_day_option.as_ref(),
+                &end_of_day,
+                synchronous,
+                hours,
+                alos.as_ref(),
+                tzais.as_ref(),
             );
         }
         assert!(ran, "No test cases were run");

@@ -334,10 +334,7 @@ mod tests {
         astronomical_calculator::NOAACalculator,
         jewish_calendar::JewishCalendar,
         tefila_rules::TefilaRules,
-        tests::{
-            jewish_calendar_test::JavaJewishCalendar,
-            test_utils::{DEFAULT_TEST_ITERATIONS, init_jvm},
-        },
+        tests::{DEFAULT_TEST_ITERATIONS, init_jvm, jewish_calendar_test::JavaJewishCalendar},
     };
     use j4rs::Jvm;
     #[allow(mismatched_lifetime_syntaxes)]

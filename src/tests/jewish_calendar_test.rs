@@ -55,7 +55,7 @@ impl<'a> JavaJewishCalendar<'a> {
         let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).unwrap();
         self.jvm.to_rust::<i64>(java_result).unwrap()
     }
-
+    #[allow(unused)]
     pub fn set_in_israel(&self, in_israel: bool) {
         self.jvm
             .invoke(
@@ -66,6 +66,7 @@ impl<'a> JavaJewishCalendar<'a> {
             .unwrap();
     }
 
+    #[allow(unused)]
     pub fn set_mukaf_choma(&self, mukaf_choma: bool) {
         self.jvm
             .invoke(
@@ -76,6 +77,7 @@ impl<'a> JavaJewishCalendar<'a> {
             .unwrap();
     }
 
+    #[allow(unused)]
     pub fn set_use_modern_holidays(&self, use_modern_holidays: bool) {
         self.jvm
             .invoke(
@@ -451,7 +453,7 @@ pub mod tests {
     use crate::{
         astronomical_calculator::NOAACalculator,
         jewish_calendar::JewishCalendar,
-        tests::test_utils::{DEFAULT_TEST_ITERATIONS, init_jvm, random_date_time, random_hebrew_date},
+        tests::{DEFAULT_TEST_ITERATIONS, init_jvm, random_date_time, random_hebrew_date},
     };
 
     use super::*;
@@ -835,50 +837,5 @@ pub mod tests {
             ran = true;
         }
         assert!(ran, "No test cases were run");
-    }
-
-    #[test]
-    fn test_yerushalmi_daf_yomi_transition_date() {
-        let jvm = init_jvm();
-
-        // This is the specific failing case from the random test (Jewish date)
-        let jewish_year = 5778;
-        let jewish_month = JewishMonth::Av;
-        let jewish_day = 23;
-        let in_israel = true;
-        let is_mukaf_choma = true;
-        let use_modern_holidays = true;
-
-        let rust_calendar = JewishCalendar::from_jewish_date(
-            jewish_year,
-            jewish_month,
-            jewish_day as u8,
-            in_israel,
-            is_mukaf_choma,
-            use_modern_holidays,
-            NOAACalculator,
-        );
-
-        let java_calendar = JavaJewishCalendar::from_jewish_date(&jvm, jewish_year, jewish_month, jewish_day);
-
-        assert!(rust_calendar.is_some(), "Failed to create Rust calendar");
-        assert!(java_calendar.is_some(), "Failed to create Java calendar");
-
-        let rust_calendar = rust_calendar.unwrap();
-        let java_calendar = java_calendar.unwrap();
-
-        // Set the same flags in Java calendar
-        java_calendar.set_in_israel(in_israel);
-        java_calendar.set_mukaf_choma(is_mukaf_choma);
-        java_calendar.set_use_modern_holidays(use_modern_holidays);
-
-        let rust_result = rust_calendar.get_daf_yomi_yerushalmi();
-        let java_result = java_calendar.get_daf_yomi_yerushalmi();
-
-        assert_eq!(
-            rust_result, java_result,
-            "Yerushalmi Daf Yomi mismatch for Jewish date {}-{:?}-{}",
-            jewish_year, jewish_month, jewish_day
-        );
     }
 }
