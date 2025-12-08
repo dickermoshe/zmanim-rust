@@ -18,3 +18,8 @@ In all places where java would throw an exception, we return None instead. We ne
 There are some timezones which are not supported by Java. These are not tested.
 
 Java's datetime library are more flexible in how they deal with DST transitions, while we are very strict. Any computation that can result in an ambiguous time, or a time which is invalid for the given timezone, will return None. Becuase of this we when comparing testing options, we allow the rust one to be None, and the java one to be Some. We limit this to .05% of all iterations to ensure we arent missing any valid bugs in the software
+
+Calling one of the following methods with a negative hours parameter will return None:
+
+- `get_half_day_based_zman_from_times`
+- `get_shaah_zmanis_based_zman_from_times`

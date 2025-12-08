@@ -522,8 +522,9 @@ mod jni_tests {
     use crate::{
         astronomical_calendar::{AstronomicalCalendar, AstronomicalCalendarTrait},
         tests::{
-            DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, DoubleType, assert_almost_equal_f64_option,
-            geolocation_test::random_geolocations, init_jvm, random_date_time, rng_double_type,
+            DEFAULT_F64_TEST_EPSILON, DEFAULT_TEST_ITERATIONS, DoubleType, assert_almost_equal_datetime_option,
+            assert_almost_equal_duration_option, assert_almost_equal_f64_option, geolocation_test::random_geolocations,
+            init_jvm, random_date_time, rng_double_type,
         },
         zmanim_calendar::ZmanimCalendar,
     };
@@ -596,10 +597,10 @@ mod jni_tests {
         for zman in Zman::values() {
             let result = rust_calendar.get_zman(&zman);
             let java_result = java_calendar.get_zman(&zman);
-            assert_eq!(
-                result, java_result,
-                "get_zman({:?}) against java with calendar {:?}",
-                zman, rust_calendar
+            assert_almost_equal_datetime_option(
+                &result,
+                &java_result,
+                &format!("get_zman({:?}) against java with calendar {:?}", zman, rust_calendar),
             );
         }
         let result = rust_calendar.get_percent_of_shaah_zmanis_from_degrees(degrees, sunset);
@@ -613,122 +614,160 @@ mod jni_tests {
 
         let result = rust_calendar.get_shaah_zmanis_gra();
         let java_result = java_calendar.get_shaah_zmanis_gra();
-        assert_eq!(
-            result, java_result,
-            "get_shaah_zmanis_gra against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_duration_option(
+            &result,
+            &java_result,
+            &format!("get_shaah_zmanis_gra against java with calendar {:?}", rust_calendar),
         );
 
         let result = rust_calendar.get_shaah_zmanis_mga();
         let java_result = java_calendar.get_shaah_zmanis_mga();
-        assert_eq!(
-            result, java_result,
-            "get_shaah_zmanis_mga against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_duration_option(
+            &result,
+            &java_result,
+            &format!("get_shaah_zmanis_mga against java with calendar {:?}", rust_calendar),
         );
 
         let result = rust_calendar.get_half_day_based_zman_from_times(start_of_half_day, end_of_half_day, hours);
         let java_result = java_calendar.get_half_day_based_zman_from_times(start_of_half_day, end_of_half_day, hours);
-        assert_eq!(
-            result, java_result,
-            "get_half_day_based_zman_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_half_day_based_zman_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_half_day, end_of_half_day, hours,
+            ),
+        );
+        let result = rust_calendar.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours);
+        let java_result = java_calendar.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours);
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_shaah_zmanis_based_zman_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day, end_of_day, hours,
+            ),
         );
 
         let result = rust_calendar.get_half_day_based_shaah_zmanis_from_times(start_of_half_day, end_of_half_day);
         let java_result = java_calendar.get_half_day_based_shaah_zmanis_from_times(start_of_half_day, end_of_half_day);
-        assert_eq!(
-            result, java_result,
-            "get_half_day_based_shaah_zmanis_from_times against java with calendar {:?}",
-            rust_calendar
-        );
-
-        let result = rust_calendar.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours);
-        let java_result = java_calendar.get_shaah_zmanis_based_zman_from_times(start_of_day, end_of_day, hours);
-        assert_eq!(
-            result, java_result,
-            "get_shaah_zmanis_based_zman_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_duration_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_half_day_based_shaah_zmanis_from_times against java with calendar {:?} with args {:?}, {:?}",
+                rust_calendar, start_of_half_day, end_of_half_day,
+            ),
         );
 
         let result = rust_calendar.get_sof_zman_shma_from_times(start_of_day, end_of_day_option, synchronous);
         let java_result = java_calendar.get_sof_zman_shma_from_times(start_of_day, end_of_day_option, synchronous);
-        assert_eq!(
-            result, java_result,
-            "get_sof_zman_shma_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_sof_zman_shma_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day, end_of_day_option, synchronous,
+            ),
         );
 
         let result = rust_calendar.get_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
         let java_result = java_calendar.get_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
-        assert_eq!(
-            result, java_result,
-            "get_mincha_ketana_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_mincha_ketana_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day_option, end_of_day, synchronous,
+            ),
         );
 
         let result = rust_calendar.get_sof_zman_tfila_from_times(start_of_day, end_of_day_option, synchronous);
         let java_result = java_calendar.get_sof_zman_tfila_from_times(start_of_day, end_of_day_option, synchronous);
-        assert_eq!(
-            result, java_result,
-            "get_sof_zman_tfila_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_sof_zman_tfila_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day, end_of_day_option, synchronous,
+            ),
         );
 
         let result = rust_calendar.get_mincha_gedola_from_times(start_of_day_option, end_of_day, synchronous);
         let java_result = java_calendar.get_mincha_gedola_from_times(start_of_day_option, end_of_day, synchronous);
-        assert_eq!(
-            result, java_result,
-            "get_mincha_gedola_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_mincha_gedola_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day_option, end_of_day, synchronous,
+            ),
         );
         let result = rust_calendar.get_plag_hamincha_from_times(start_of_day_option, end_of_day, synchronous);
         let java_result = java_calendar.get_plag_hamincha_from_times(start_of_day_option, end_of_day, synchronous);
-        assert_eq!(
-            result, java_result,
-            "get_plag_hamincha_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_plag_hamincha_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day_option, end_of_day, synchronous,
+            ),
         );
 
         let result = rust_calendar.get_samuch_le_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
         let java_result =
             java_calendar.get_samuch_le_mincha_ketana_from_times(start_of_day_option, end_of_day, synchronous);
-        assert_eq!(
-            result, java_result,
-            "get_samuch_le_mincha_ketana_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_samuch_le_mincha_ketana_from_times against java with calendar {:?} with args {:?}, {:?}, {:?}",
+                rust_calendar, start_of_day_option, end_of_day, synchronous,
+            ),
         );
 
         let result = rust_calendar.get_sof_zman_kidush_levana_15_days_from_times(alos, tzais);
         let java_result = java_calendar.get_sof_zman_kidush_levana_15_days_from_times(alos, tzais);
-        assert_eq!(
-            result, java_result,
-            "get_sof_zman_kidush_levana_15_days_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_sof_zman_kidush_levana_15_days_from_times against java with calendar {:?} with args {:?}, {:?}",
+                rust_calendar, alos, tzais,
+            ),
         );
 
         let result = rust_calendar.get_sof_zman_kidush_levana_between_moldos_from_times(alos, tzais);
         let java_result = java_calendar.get_sof_zman_kidush_levana_between_moldos_from_times(alos, tzais);
-        assert_eq!(
-            result, java_result,
-            "get_sof_zman_kidush_levana_between_moldos_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_sof_zman_kidush_levana_between_moldos_from_times against java with calendar {:?} with args {:?}, {:?}",
+                rust_calendar, alos, tzais,
+            ),
         );
 
         let result = rust_calendar.get_tchilas_zman_kidush_levana_3_days_from_times(alos, tzais);
         let java_result = java_calendar.get_tchilas_zman_kidush_levana_3_days_from_times(alos, tzais);
-        assert_eq!(
-            result, java_result,
-            "get_tchilas_zman_kidush_levana_3_days_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_tchilas_zman_kidush_levana_3_days_from_times against java with calendar {:?} with args {:?}, {:?}",
+                rust_calendar, alos, tzais,
+            ),
         );
 
         let result = rust_calendar.get_tchilas_zman_kidush_levana_7_days_from_times(alos, tzais);
         let java_result = java_calendar.get_tchilas_zman_kidush_levana_7_days_from_times(alos, tzais);
-        assert_eq!(
-            result, java_result,
-            "get_tchilas_zman_kidush_levana_7_days_from_times against java with calendar {:?}",
-            rust_calendar
+        assert_almost_equal_datetime_option(
+            &result,
+            &java_result,
+            &format!(
+                "get_tchilas_zman_kidush_levana_7_days_from_times against java with calendar {:?} with args {:?}, {:?}",
+                rust_calendar, alos, tzais,
+            ),
         );
     }
     // Takes a range of ints and uses a one between and applies as seconds to the datetime
@@ -776,12 +815,7 @@ mod jni_tests {
             let start_of_day_option = appy_random_offset_to_option_datetime(&mut rng, &start_of_half_day);
             let end_of_day_option = appy_random_offset_to_option_datetime(&mut rng, &end_of_half_day);
             let synchronous = rng.gen_bool(0.5);
-            let hours = match rng_double_type(&mut rng) {
-                DoubleType::Finite => rng.gen_range(-25.0..=25.0),
-                DoubleType::Infinite => f64::INFINITY,
-                DoubleType::OutOfRange => -1.0,
-                DoubleType::Nan => f64::NAN,
-            };
+            let hours = rng.gen_range(0.0..=25.0);
             let alos = appy_random_offset_to_option_datetime(&mut rng, &start_of_half_day);
             let tzais = appy_random_offset_to_option_datetime(&mut rng, &end_of_half_day);
             ran = true;

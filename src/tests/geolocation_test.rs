@@ -52,15 +52,33 @@ impl<'a> JavaGeoLocation<'a> {
 
 impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
     fn get_latitude(&self) -> f64 {
-        unimplemented!("get_latitude is not implemented in this test and should not be called");
+        self.jvm
+            .to_rust::<f64>(
+                self.jvm
+                    .invoke(&self.instance, "getLatitude", InvocationArg::empty())
+                    .unwrap(),
+            )
+            .unwrap()
     }
 
     fn get_longitude(&self) -> f64 {
-        unimplemented!("get_longitude is not implemented in this test and should not be called");
+        self.jvm
+            .to_rust::<f64>(
+                self.jvm
+                    .invoke(&self.instance, "getLongitude", InvocationArg::empty())
+                    .unwrap(),
+            )
+            .unwrap()
     }
 
     fn get_elevation(&self) -> f64 {
-        unimplemented!("get_elevation is not implemented in this test and should not be called");
+        self.jvm
+            .to_rust::<f64>(
+                self.jvm
+                    .invoke(&self.instance, "getElevation", InvocationArg::empty())
+                    .unwrap(),
+            )
+            .unwrap()
     }
 
     fn get_rhumb_line_distance(&self, location: &JavaGeoLocation<'_>) -> f64 {
@@ -288,7 +306,6 @@ mod jni_tests {
         assert_almost_equal_duration(
             &rust_geolocation.get_local_mean_time_offset(date),
             &java_geolocation.get_local_mean_time_offset(date),
-            10, // 10 milliseconds
             &format!(
                 "getLocalMeanTimeOffset of {:?} against {:?}",
                 rust_geolocation, other_rust_geolocation

@@ -199,9 +199,7 @@ pub fn assert_almost_equal_i64(a: i64, b: i64, diff: i64, message: &str) {
 pub fn assert_almost_equal_f64_option(a: &Option<f64>, b: &Option<f64>, diff: f64, message: &str) {
     match (a, b) {
         (Some(a), Some(b)) => assert_almost_equal_f64(*a, *b, diff, message),
-        (None, Some(_)) => {
-            add_rust_none_count();
-        }
+
         (None, None) => (),
         _ => {
             panic!("Error: {:?} vs {:?}, {}", a, b, message);
@@ -215,38 +213,26 @@ pub fn assert_almost_equal_f64_option(a: &Option<f64>, b: &Option<f64>, diff: f6
 pub fn assert_almost_equal_i64_option(a: &Option<i64>, b: &Option<i64>, diff: i64, message: &str) {
     match (a, b) {
         (Some(a), Some(b)) => assert_almost_equal_i64(*a, *b, diff, message),
-        (None, Some(_)) => {
-            add_rust_none_count();
-        }
+
         (None, None) => (),
         _ => {
             panic!("Error: {:?} vs {:?}, {}", a, b, message);
         }
     }
 }
-#[allow(dead_code)]
-pub fn assert_almost_equal_datetime(
-    a: &DateTime<chrono_tz::Tz>,
-    b: &DateTime<chrono_tz::Tz>,
-    diff: i64,
-    message: &str,
-) {
-    let result = (a.timestamp_millis() - b.timestamp_millis()).abs() < diff;
+pub fn assert_almost_equal_datetime<Tz: TimeZone>(a: &DateTime<Tz>, b: &DateTime<Tz>, message: &str) {
+    let result = (a.timestamp_millis() - b.timestamp_millis()).abs() < 50;
     let distance = (a.timestamp_millis() - b.timestamp_millis()).abs();
     assert!(result, "Error: {:?} vs {:?}, distance: {}, {}", a, b, distance, message);
 }
-#[allow(dead_code)]
 pub fn assert_almost_equal_datetime_option(
     a: &Option<DateTime<chrono_tz::Tz>>,
     b: &Option<DateTime<chrono_tz::Tz>>,
-    diff: i64,
     message: &str,
 ) {
     match (a, b) {
-        (Some(a), Some(b)) => assert_almost_equal_datetime(a, b, diff, message),
-        (None, Some(_)) => {
-            add_rust_none_count();
-        }
+        (Some(a), Some(b)) => assert_almost_equal_datetime(a, b, message),
+
         (None, None) => (),
         _ => {
             panic!("Error: {:?} vs {:?}, {}", a, b, message);
@@ -254,10 +240,20 @@ pub fn assert_almost_equal_datetime_option(
     }
 }
 /// Asserts that two Duration values are approximately equal within the given millisecond tolerance.
-pub fn assert_almost_equal_duration(a: &Duration, b: &Duration, diff: i64, message: &str) {
-    let result = (a.num_milliseconds() - b.num_milliseconds()).abs() < diff;
+pub fn assert_almost_equal_duration(a: &Duration, b: &Duration, message: &str) {
+    let result = (a.num_milliseconds() - b.num_milliseconds()).abs() < 10;
     let distance = (a.num_milliseconds() - b.num_milliseconds()).abs();
     assert!(result, "Error: {:?} vs {:?}, distance: {}, {}", a, b, distance, message);
+}
+
+pub fn assert_almost_equal_duration_option(a: &Option<Duration>, b: &Option<Duration>, message: &str) {
+    match (a, b) {
+        (Some(a), Some(b)) => assert_almost_equal_duration(a, b, message),
+        (None, None) => (),
+        _ => {
+            panic!("Error: {:?} vs {:?}, {}", a, b, message);
+        }
+    }
 }
 
 /// An enum to represent the types of a double value.

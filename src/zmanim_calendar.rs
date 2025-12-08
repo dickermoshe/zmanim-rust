@@ -262,9 +262,9 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
     ) -> Option<DateTime<Tz>> {
         let shaah_zmanis = self.get_half_day_based_shaah_zmanis_from_times(start_of_half_day, end_of_half_day)?;
         if hours >= 0.0 {
-            Some(start_of_half_day.clone() + lossy_multiply_duration(shaah_zmanis, hours))
+            Some(start_of_half_day.clone() + lossy_multiply_duration(shaah_zmanis, hours)?)
         } else {
-            Some(end_of_half_day.clone() + lossy_multiply_duration(shaah_zmanis, hours))
+            Some(end_of_half_day.clone() + lossy_multiply_duration(shaah_zmanis, hours)?)
         }
     }
 
@@ -286,7 +286,7 @@ impl<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalculatorTrait, J: Astro
             .astronomical_calendar
             .get_temporal_hour_from_times(start_of_day, end_of_day)?;
 
-        Some(start_of_day.clone() + lossy_multiply_duration(shaah_zmanis, hours))
+        Some(start_of_day.clone() + lossy_multiply_duration(shaah_zmanis, hours)?)
     }
 
     fn get_sof_zman_shma_from_times(
