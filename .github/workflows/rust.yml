@@ -18,8 +18,7 @@ jobs:
           submodules: true
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          cache-on-failure: true
-          cache-directories: ./target/debug/jassets
+          cache: false
       - uses: actions/setup-java@v5
         with:
           distribution: "temurin"
