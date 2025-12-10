@@ -59,7 +59,7 @@ pub fn create_zmanim_calendars<'a>(
 )> {
     let (geo_location, java_geo_location) = create_geolocations(jvm, rng)?;
 
-    let date_time = random_date_time(rng, java_geo_location.timezone);
+    let date_time = random_date_time(rng, &java_geo_location.timezone);
     let candle_lighting_offset = Duration::minutes(rng.gen_range(0..=60));
     let use_astronomical_chatzos = rng.gen_bool(0.5);
     let use_astronomical_chatzos_for_other_zmanim = rng.gen_bool(0.5);
@@ -97,7 +97,7 @@ pub fn create_jewish_calendars<'a>(
     let use_modern_holidays = rng.gen_bool(0.5);
 
     if use_gregorian_date {
-        let date_time = random_date_time(rng, chrono_tz::Tz::UTC);
+        let date_time = random_date_time(rng, &chrono_tz::Tz::UTC);
         let message = format!(
             "year: {}, month: {}, day: {}, in_israel: {}, is_mukaf_choma: {}, use_modern_holidays: {}",
             date_time.year(),

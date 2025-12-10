@@ -88,9 +88,6 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocatio
         let molad_based_time = self._localized_datetime(utc_molad_based_time);
         let last_midnight = self._get_midnight_last_night()?;
         let midnight_tonight = self._get_midnight_tonight()?;
-        println!("now: {:?}", self.get_date_time());
-        println!("last_midnight: {:?}", last_midnight);
-        println!("midnight_tonight: {:?}", midnight_tonight);
 
         if molad_based_time < last_midnight || molad_based_time > midnight_tonight {
             None

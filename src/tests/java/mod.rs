@@ -167,7 +167,7 @@ mod java_tests {
             if let Some((geo_location, java_geo_location)) = create_geolocations(&jvm, &mut rng)
                 && let Some((other_geo_location, other_java_geo_location)) = create_geolocations(&jvm, &mut rng)
             {
-                let date = random_date_time(&mut rng, other_java_geo_location.timezone);
+                let date = random_date_time(&mut rng, &other_java_geo_location.timezone);
                 compare_geolocations(
                     &geo_location,
                     &java_geo_location,
@@ -190,7 +190,7 @@ mod java_tests {
 
         for _ in 0..get_test_iterations() {
             if let Some((geo_location, java_geo_location)) = create_geolocations(&jvm, &mut rng) {
-                let date = random_date_time(&mut rng, java_geo_location.timezone);
+                let date = random_date_time(&mut rng, &java_geo_location.timezone);
                 let zenith = random_zenith(&mut rng);
                 let adjust_for_elevation = rng.gen_bool(0.5);
                 compare_astronomical_calculators(

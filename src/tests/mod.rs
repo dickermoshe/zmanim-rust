@@ -6,11 +6,53 @@ use chrono::{DateTime, Datelike, Duration, TimeZone};
 use chrono_tz::Tz;
 use rand::Rng;
 
+static STATIC_OFFSET_TIMEZONES: &[Tz] = &[
+    Tz::Etc__GMT,
+    Tz::Etc__GMTPlus0,
+    Tz::Etc__GMTPlus1,
+    Tz::Etc__GMTPlus10,
+    Tz::Etc__GMTPlus11,
+    Tz::Etc__GMTPlus12,
+    Tz::Etc__GMTPlus2,
+    Tz::Etc__GMTPlus3,
+    Tz::Etc__GMTPlus4,
+    Tz::Etc__GMTPlus5,
+    Tz::Etc__GMTPlus6,
+    Tz::Etc__GMTPlus7,
+    Tz::Etc__GMTPlus8,
+    Tz::Etc__GMTPlus9,
+    Tz::Etc__GMTMinus0,
+    Tz::Etc__GMTMinus1,
+    Tz::Etc__GMTMinus10,
+    Tz::Etc__GMTMinus11,
+    Tz::Etc__GMTMinus12,
+    Tz::Etc__GMTMinus13,
+    Tz::Etc__GMTMinus14,
+    Tz::Etc__GMTMinus2,
+    Tz::Etc__GMTMinus3,
+    Tz::Etc__GMTMinus4,
+    Tz::Etc__GMTMinus5,
+    Tz::Etc__GMTMinus6,
+    Tz::Etc__GMTMinus7,
+    Tz::Etc__GMTMinus8,
+    Tz::Etc__GMTMinus9,
+];
+
+static DEFAULT_TEST_YEARS: i64 = 100;
+static DEFAULT_TEST_YEARS_IN_MILLISECONDS: i64 = 1000 * 3600 * 24 * 365 * DEFAULT_TEST_YEARS;
+
 /// Generates a random DateTime in the range 1870-2070 with the given timezone.
-pub fn random_date_time(rng: &mut impl Rng, tz: Tz) -> DateTime<chrono_tz::Tz> {
-    let years_in_milliseconds = 1000 * 3600 * 24 * 365;
+pub fn random_date_time(rng: &mut impl Rng, tz: &Tz) -> DateTime<chrono_tz::Tz> {
+    // Java and Rust handle historical timezones very differently.
+    // Therefor, if the timezone is not a static offset, we will only generate dates after 1970.
+    let start = if STATIC_OFFSET_TIMEZONES.contains(tz) {
+        -DEFAULT_TEST_YEARS_IN_MILLISECONDS
+    } else {
+        0
+    };
+
     let milliseconds_since_epoch: i64 = rng.gen_range(
-        -years_in_milliseconds..=years_in_milliseconds * 100, // 1870 to 2070
+        start..=DEFAULT_TEST_YEARS_IN_MILLISECONDS, // 1870 to 2070
     );
     tz.timestamp_millis_opt(milliseconds_since_epoch).unwrap()
 }
@@ -107,7 +149,7 @@ pub fn assert_almost_equal_duration_option(a: &Option<Duration>, b: &Option<Dura
 
 /// Generates a random Hebrew date in the range 1870-2070.
 pub fn random_hebrew_date(rng: &mut impl Rng) -> (i32, JewishMonth, u8) {
-    let dt = random_date_time(rng, chrono_tz::Tz::UTC);
+    let dt = random_date_time(rng, &chrono_tz::Tz::UTC);
     let year = dt.year() + 3760; // 3760 is the difference between the Gregorian and Hebrew years
 
     let month = match rng.gen_range(1..=13) {
