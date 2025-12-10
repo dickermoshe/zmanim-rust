@@ -986,12 +986,12 @@ impl YerushalmiTractate {
 
 // impl<Tz: TimeZone> Calculations<Tz> {
 //     pub fn calculate(self, zmanim_calendar: &impl ZmanimCalendarTrait<Tz>) -> Option<DateTime<Tz>> {
-//         let astronomical_calendar = zmanim_calendar.get_astronomical_calendar();
+//         let zmanim_calendar = zmanim_calendar.get_zmanim_calendar();
 //         match self {
 //             Calculations::HalfDayBasedZman(start_of_half_day, end_of_half_day, hours) => {
 //                 zmanim_calendar._get_half_day_based_zman(start_of_half_day, end_of_half_day, hours)
 //             }
-//             Calculations::LocalMeanTime(hours) => astronomical_calendar.get_local_mean_time(hours),
+//             Calculations::LocalMeanTime(hours) => zmanim_calendar.get_local_mean_time(hours),
 //             Calculations::MinchaGedola(start_of_day, end_of_day, synchronous) => {
 //                 zmanim_calendar._get_mincha_gedola(start_of_day, end_of_day, synchronous)
 //             }
@@ -1027,13 +1027,13 @@ impl YerushalmiTractate {
 //                 zmanim_calendar._get_sof_zman_tfila(start_of_day, end_of_day, synchronous)
 //             }
 //             Calculations::SunTransit(start_of_day, end_of_day) => {
-//                 astronomical_calendar.get_sun_transit_from_times(start_of_day, end_of_day)
+//                 zmanim_calendar.get_sun_transit_from_times(start_of_day, end_of_day)
 //             }
 //             Calculations::SunriseOffsetByDegrees(degrees) => {
-//                 astronomical_calendar.get_sunrise_offset_by_degrees(degrees)
+//                 zmanim_calendar.get_sunrise_offset_by_degrees(degrees)
 //             }
 //             Calculations::SunsetOffsetByDegrees(degrees) => {
-//                 astronomical_calendar.get_sunset_offset_by_degrees(degrees)
+//                 zmanim_calendar.get_sunset_offset_by_degrees(degrees)
 //             }
 //             Calculations::TimeOffset(time, duration) => Some(time + duration),
 //         }

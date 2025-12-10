@@ -6,12 +6,11 @@ version = "0.1.0"
 [features]
 default = ["std"]
 std = []
-no_std = ["core_maths"]
 defmt = ["dep:defmt"]
 
 
 [dependencies]
-core_maths = { version = "0.1.1", optional = true }
+core_maths = "0.1.1"
 defmt = { version = "1.0.1", optional = true }
 time = { version = "0.3.44", default-features = false }
 

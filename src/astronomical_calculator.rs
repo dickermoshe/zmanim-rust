@@ -1,11 +1,18 @@
-use crate::defmt::DefmtFormatTrait;
 use crate::{constants::*, geolocation::GeoLocationTrait};
 use chrono::{DateTime, Datelike, TimeZone, Timelike};
 use core::f64::consts::PI;
-#[cfg(feature = "no_std")]
+#[allow(unused_imports)]
 use core_maths::CoreFloat;
 
-pub trait AstronomicalCalculatorTrait: Clone + DefmtFormatTrait {
+/// This trait is used to make the AstronomicalCalculatorTrait trait dependent on the defmt::Format trait
+/// if the defmt feature is enabled.
+#[cfg(feature = "defmt")]
+pub trait AstronomicalCalculatorTraitDefmt: defmt::Format {}
+
+#[cfg(not(feature = "defmt"))]
+pub trait AstronomicalCalculatorTraitDefmt {}
+
+pub trait AstronomicalCalculatorTrait: Clone + AstronomicalCalculatorTraitDefmt {
     fn get_utc_noon<Tz: TimeZone, G: GeoLocationTrait>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
 
     fn get_utc_midnight<Tz: TimeZone, G: GeoLocationTrait>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
@@ -35,6 +42,8 @@ pub trait AstronomicalCalculatorTrait: Clone + DefmtFormatTrait {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default, Eq)]
 pub struct NOAACalculator;
+
+impl AstronomicalCalculatorTraitDefmt for NOAACalculator {}
 
 pub(crate) fn get_julian_day<Tz: TimeZone>(date_time: &DateTime<Tz>) -> f64 {
     let mut year = date_time.year();
@@ -369,5 +378,3 @@ impl AstronomicalCalculatorTrait for NOAACalculator {
         self._get_solar_elevation_azimuth(date_time, geo_location, true)
     }
 }
-
-impl DefmtFormatTrait for NOAACalculator {}

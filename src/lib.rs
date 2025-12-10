@@ -1,17 +1,19 @@
-#![cfg_attr(not(any(feature = "std", test)), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod astronomical_calculator;
-pub mod astronomical_calendar;
 pub mod constants;
 pub mod daf;
-pub mod defmt;
 pub mod geolocation;
 pub mod jewish_calendar;
-pub mod jewish_date;
-pub mod math;
 pub mod parshas;
 pub mod tefila_rules;
-#[cfg(all(test, not(feature = "defmt")))]
+#[cfg(test)]
 pub mod tests;
-
 pub mod zmanim_calendar;
+
+pub mod prelude {
+    pub use crate::{
+        astronomical_calculator::*, constants::*, daf::*, geolocation::*, jewish_calendar::*, parshas::*,
+        tefila_rules::*, zmanim_calendar::*,
+    };
+}
