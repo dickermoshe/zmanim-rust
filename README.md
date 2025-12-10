@@ -1,15 +1,14 @@
 TODO: If you are reading this it means that we forgot to do something before we published this library
-TODO: Fix that you cannot create a month with 30 days in a chaser.
 TODO: Get changes merged into kosher jav
-TODO: Remove unwrap from this entire codebase
 TODO: Add no_std tests
 TODO: document that users shold create with datetimes that have 0:00 oclock
 ensure we can compile no_Std
+no tehran in tests
+fix bad.md
 
 - Include a changelog
 - restrict the submodules to a specific tag
 - Update github description
-Compare datetimes without converting to timestamps in tests
 
 # Jew-SDK
 

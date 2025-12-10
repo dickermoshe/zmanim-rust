@@ -1,6 +1,7 @@
 use crate::{constants::*, geolocation::GeoLocationTrait};
 use chrono::{DateTime, Datelike, TimeZone, Timelike};
 use core::f64::consts::PI;
+use core::fmt::Debug;
 #[allow(unused_imports)]
 use core_maths::CoreFloat;
 
@@ -12,7 +13,7 @@ pub trait AstronomicalCalculatorTraitDefmt: defmt::Format {}
 #[cfg(not(feature = "defmt"))]
 pub trait AstronomicalCalculatorTraitDefmt {}
 
-pub trait AstronomicalCalculatorTrait: Clone + AstronomicalCalculatorTraitDefmt {
+pub trait AstronomicalCalculatorTrait: Clone + AstronomicalCalculatorTraitDefmt + Debug {
     fn get_utc_noon<Tz: TimeZone, G: GeoLocationTrait>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;
 
     fn get_utc_midnight<Tz: TimeZone, G: GeoLocationTrait>(&self, date_time: &DateTime<Tz>, geo_location: &G) -> f64;

@@ -21,7 +21,12 @@ pub fn create_geolocations<'a, Rng: rand::Rng>(
     let tz = TZ_VARIANTS[rng.gen_range(0..TZ_VARIANTS.len())];
     // DIFF: Java cannot handle the some timezones
     // Tehran at the time of the revolution had a unclear timezone which Java and Rust handle differently
-    if tz.name() == "ROC" || tz.name() == "America/Coyhaique" || tz.name() == "GMT" || tz.name() == "Asia/Tehran" {
+    if tz.name() == "ROC"
+        || tz.name() == "America/Coyhaique"
+        || tz.name() == "GMT"
+        || tz.name() == "Asia/Tehran"
+        || tz.name() == "Iran"
+    {
         return None;
     }
 

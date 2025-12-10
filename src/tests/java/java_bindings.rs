@@ -1,5 +1,7 @@
 //! Implementations of the core traits which delegate to the Java implementation.
 //! This serves as the base of all our interop tests.
+use std::fmt::{Debug, Error, Formatter};
+
 use crate::constants::{JewishHoliday, JewishMonth, Parsha, Zman};
 use crate::daf::{BavliDaf, YerushalmiDaf};
 use crate::geolocation::GeoLocation;
@@ -190,6 +192,11 @@ impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
 pub struct JavaAstronomicalCalculator<'a> {
     pub jvm: &'a Jvm,
     pub instance: Instance,
+}
+impl<'a> Debug for JavaAstronomicalCalculator<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "JavaAstronomicalCalculator")
+    }
 }
 impl<'a> JavaAstronomicalCalculator<'a> {
     pub fn new(jvm: &'a Jvm) -> Self {

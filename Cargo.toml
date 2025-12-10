@@ -49,11 +49,15 @@ rev = "478273"
 
 [lib]
 name = "jew_sdk"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [profile.release]
 opt-level = "z"
 lto = true
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
 
 [workspace.lints.clippy]
 unwrap_used = "warn"
