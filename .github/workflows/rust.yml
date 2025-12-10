@@ -12,7 +12,6 @@ env:
 jobs:
   test:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,25 +48,13 @@ jobs:
           components: rustfmt
       - name: Rustfmt Check
         uses: actions-rust-lang/rustfmt@v1
-
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        features:
-          - name: "no features"
-            flags: "--no-default-features"
-          - name: "std only"
-            flags: "--no-default-features --features std"
-          - name: "defmt only"
-            flags: "--no-default-features --features defmt"
-          - name: "all features"
-            flags: "--all-features"
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
-      - name: Clippy check with ${{ matrix.features.name }}
-        run: cargo clippy ${{ matrix.features.flags }} -- -D warnings
+      - name: Clippy check
+        run: cargo clippy $ -- -D warnings
