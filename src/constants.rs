@@ -485,17 +485,6 @@ pub enum JewishMonth {
 impl JewishMonth {
     /// Return an array of all the months between from and to, inclusive.
     /// Returns an array with a length of 13 padded with None.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use kosher_java::constants::JewishMonth;
-    /// let months = JewishMonth::range_inclusive(JewishMonth::Tishrei, JewishMonth::Adar);
-    /// assert_eq!(months, [
-    ///     Some(JewishMonth::Tishrei), Some(JewishMonth::Cheshvan), Some(JewishMonth::Kislev), Some(JewishMonth::Teves),
-    ///     Some(JewishMonth::Shevat), Some(JewishMonth::Adar), None, None, None, None, None, None, None
-    /// ]);
-    /// ```
     pub(crate) fn range_inclusive(from: JewishMonth, to: JewishMonth) -> Flatten<IntoIter<Option<JewishMonth>, 13>> {
         let mut result = [None; 13];
         let from_index = from as u8 - 1;
@@ -514,17 +503,6 @@ impl JewishMonth {
     }
     /// Return an array of all the months between from and to, inclusive.
     /// Returns an array with a length of 13 padded with None.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use kosher_java::constants::JewishMonth;
-    /// let months = JewishMonth::range(JewishMonth::Tishrei, JewishMonth::Av);
-    /// assert_eq!(months, [
-    ///     Some(JewishMonth::Tishrei), Some(JewishMonth::Cheshvan), Some(JewishMonth::Kislev), Some(JewishMonth::Teves),
-    ///     Some(JewishMonth::Shevat), Some(JewishMonth::Adar), None, None, None, None, None, None, None
-    /// ]);
-    /// ```
     pub(crate) fn range(from: JewishMonth, to: JewishMonth) -> Flatten<IntoIter<Option<JewishMonth>, 13>> {
         let mut result = [None; 13];
         let from_index = from as u8;
