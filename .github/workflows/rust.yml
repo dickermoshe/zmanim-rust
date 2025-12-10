@@ -25,7 +25,8 @@ jobs:
         run: java --version
       - name: Build Java submodule
         working-directory: ./kosher-java
-        run: mvn package `-Dmaven.test.skip `-Dmaven.javadoc.skip=true
+        run: mvn package `-Dmaven.test.skip `-Dmaven.javadoc.skip=true `-Dmaven.source.skip=true
+
       - name: Build Rust project
         run: cargo build
       - name: Run tests with default features
@@ -57,4 +58,4 @@ jobs:
         with:
           components: clippy
       - name: Clippy check
-        run: cargo clippy $ -- -D warnings
+        run: cargo clippy -- -D warnings
