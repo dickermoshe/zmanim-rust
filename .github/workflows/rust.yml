@@ -21,17 +21,17 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "17"
+          cache: "maven"
       - name: Check Java version
         run: java --version
       - name: Build Java submodule
         working-directory: ./kosher-java
         run: mvn package `-Dmaven.test.skip `-Dmaven.javadoc.skip=true `-Dmaven.source.skip=true
-      - name: List all the output files
-        working-directory: ./kosher-java
-        run: ls .\target\
-
       - name: Build Rust project
         run: cargo build
+      - name: List all the output files
+        shell: bash
+        run: find target -type f -o -type d
       - name: Run tests with default features
         env:
           RUST_BACKTRACE: 1
