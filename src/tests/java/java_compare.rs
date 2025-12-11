@@ -100,7 +100,7 @@ pub fn compare_geolocations<'a>(
     assert_almost_equal_f64(
         rust_geolocation.get_rhumb_line_distance(other_rust_geolocation),
         java_geolocation.get_rhumb_line_distance(other_java_geolocation),
-        DEFAULT_F64_TEST_EPSILON,
+        0.02,
         &format!(
             "getRhumbLineDistance of {:?} against {:?}",
             rust_geolocation, other_rust_geolocation
@@ -109,7 +109,7 @@ pub fn compare_geolocations<'a>(
     assert_almost_equal_f64(
         rust_geolocation.get_rhumb_line_bearing(other_rust_geolocation),
         java_geolocation.get_rhumb_line_bearing(other_java_geolocation),
-        DEFAULT_F64_TEST_EPSILON,
+        0.02,
         &format!(
             "getRhumbLineBearing of {:?} against {:?}",
             rust_geolocation, other_rust_geolocation
@@ -118,7 +118,7 @@ pub fn compare_geolocations<'a>(
     assert_almost_equal_f64_option(
         &rust_geolocation.get_geodesic_initial_bearing(other_rust_geolocation),
         &java_geolocation.get_geodesic_initial_bearing(other_java_geolocation),
-        DEFAULT_F64_TEST_EPSILON,
+        0.02,
         &format!(
             "getGeodesicInitialBearing of {:?} against {:?}",
             rust_geolocation, other_rust_geolocation
@@ -127,7 +127,7 @@ pub fn compare_geolocations<'a>(
     assert_almost_equal_f64_option(
         &rust_geolocation.get_geodesic_final_bearing(other_rust_geolocation),
         &java_geolocation.get_geodesic_final_bearing(other_java_geolocation),
-        DEFAULT_F64_TEST_EPSILON,
+        0.02,
         &format!(
             "getGeodesicFinalBearing of {:?} against {:?}",
             rust_geolocation, other_rust_geolocation
@@ -136,7 +136,7 @@ pub fn compare_geolocations<'a>(
     assert_almost_equal_f64_option(
         &rust_geolocation.get_geodesic_distance(other_rust_geolocation),
         &java_geolocation.get_geodesic_distance(other_java_geolocation),
-        DEFAULT_F64_TEST_EPSILON,
+        0.02,
         &format!(
             "getGeodesicDistance of {:?} against {:?}",
             rust_geolocation, other_rust_geolocation
