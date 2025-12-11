@@ -74,7 +74,7 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocatio
             .with_minute(0)?
             .with_second(0)?
             .with_nanosecond(0)?
-            .checked_add_signed(chrono::Duration::days(1))?;
+            .checked_add_days(Days::new(1))?;
         Some(midnight)
     }
 
@@ -88,7 +88,6 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocatio
         let molad_based_time = self._localized_datetime(utc_molad_based_time);
         let last_midnight = self._get_midnight_last_night()?;
         let midnight_tonight = self._get_midnight_tonight()?;
-
         if molad_based_time < last_midnight || molad_based_time > midnight_tonight {
             None
         } else {
@@ -248,6 +247,10 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendarTrait<Tz, GeoLo
         tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let jewish_calendar = self._get_jewish_calendar()?;
+        println!(
+            "jewish_calendar.get_jewish_day_of_month() = {}",
+            jewish_calendar.get_jewish_day_of_month()
+        );
         if jewish_calendar.get_jewish_day_of_month() < 4 || jewish_calendar.get_jewish_day_of_month() > 9 {
             return None;
         }
