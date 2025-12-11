@@ -676,6 +676,8 @@ impl BavliTractate {
             BavliTractate::Niddah => "נדה",
         }
     }
+
+    
 }
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]

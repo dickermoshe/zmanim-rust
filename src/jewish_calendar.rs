@@ -437,15 +437,21 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     fn get_parsha_list(&self) -> Option<ParshaList> {
         let rosh_hashana_day_of_week =
             (JewishCalendar::<N>::get_jewish_calendar_elapsed_days(self.get_jewish_year()) + 1) % 7;
-        let rosh_hashana_day_of_week = if rosh_hashana_day_of_week == 0 {
-            7
-        } else {
-            rosh_hashana_day_of_week
-        };
+            let rosh_hashana_day_of_week = match  rosh_hashana_day_of_week {
+                0 => Some(Weekday::Sat),
+                1=>Some(Weekday::Sun),
+                2=>Some(Weekday::Mon),
+                3=>Some(Weekday::Tue),
+                4=>Some(Weekday::Wed),
+                5=>Some(Weekday::Thu),
+                6=>Some(Weekday::Fri),
+                _ => None
+            }?;
+  
 
         if self.is_jewish_leap_year() {
             match rosh_hashana_day_of_week {
-                2 => {
+                Weekday::Mon => {
                     if self.is_kislev_short() {
                         if self.in_israel {
                             Some(PARSHA_LIST_14)
@@ -462,14 +468,14 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
                         None
                     }
                 }
-                3 => {
+                Weekday::Tue => {
                     if self.in_israel {
                         Some(PARSHA_LIST_15)
                     } else {
                         Some(PARSHA_LIST_7)
                     }
                 }
-                5 => {
+                Weekday::Thu => {
                     if self.is_kislev_short() {
                         Some(PARSHA_LIST_8)
                     } else if self.is_cheshvan_long() {
@@ -478,7 +484,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
                         None
                     }
                 }
-                7 => {
+                Weekday::Sat => {
                     if self.is_kislev_short() {
                         Some(PARSHA_LIST_10)
                     } else if self.is_cheshvan_long() {
@@ -495,7 +501,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             }
         } else {
             match rosh_hashana_day_of_week {
-                2 => {
+                Weekday::Mon => {
                     if self.is_kislev_short() {
                         Some(PARSHA_LIST_0)
                     } else if self.is_cheshvan_long() {
@@ -508,14 +514,14 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
                         None
                     }
                 }
-                3 => {
+                Weekday::Tue=> {
                     if self.in_israel {
                         Some(PARSHA_LIST_12)
                     } else {
                         Some(PARSHA_LIST_1)
                     }
                 }
-                5 => {
+                Weekday::Thu=> {
                     if self.is_cheshvan_long() {
                         Some(PARSHA_LIST_3)
                     } else if !self.is_kislev_short() {
@@ -528,7 +534,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
                         None
                     }
                 }
-                7 => {
+                Weekday::Sat=> {
                     if self.is_kislev_short() {
                         Some(PARSHA_LIST_4)
                     } else if self.is_cheshvan_long() {
@@ -917,9 +923,9 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn is_aseres_yemei_teshuva(&self) -> bool {
-        let month = self.get_jewish_month() as i32;
+        let month = self.get_jewish_month() ;
         let day = self.get_jewish_day_of_month();
-        month == JewishMonth::Tishrei as i32 && day <= 10
+        month == JewishMonth::Tishrei && day <= 10
     }
 
     fn is_pesach(&self) -> bool {
@@ -991,8 +997,8 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
     fn is_rosh_chodesh(&self) -> bool {
         let day = self.get_jewish_day_of_month();
-        let month = self.get_jewish_month() as i32;
-        (day == 1 && month != JewishMonth::Tishrei as i32) || day == 30
+        let month = self.get_jewish_month() ;
+        (day == 1 && month != JewishMonth::Tishrei ) || day == 30
     }
 
     fn is_isru_chag(&self) -> bool {
@@ -1014,10 +1020,10 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
     fn is_taanis_bechoros(&self) -> bool {
         let day = self.get_jewish_day_of_month();
-        let day_of_week = self.get_day_of_week() as i32;
-        let month = self.get_jewish_month() as i32;
+        let day_of_week = self.get_day_of_week() ;
+        let month = self.get_jewish_month() ;
 
-        month == JewishMonth::Nissan as i32 && ((day == 14 && day_of_week != 7) || (day == 12 && day_of_week == 5))
+        month == JewishMonth::Nissan  && ((day == 14 && day_of_week != Weekday::Sat) || (day == 12 && day_of_week == Weekday::Thu))
     }
 
     fn get_day_of_chanukah(&self) -> Option<u8> {
@@ -1025,10 +1031,10 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             return None;
         }
 
-        let month = self.get_jewish_month() as i32;
+        let month = self.get_jewish_month();
         let day = self.get_jewish_day_of_month();
 
-        if month == JewishMonth::Kislev as i32 {
+        if month == JewishMonth::Kislev {
             Some(day - 24)
         } else if self.is_kislev_short() {
             Some(day + 5)
@@ -1053,14 +1059,14 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn get_day_of_omer(&self) -> Option<u8> {
-        let month = self.get_jewish_month() as i32;
+        let month = self.get_jewish_month() ;
         let day = self.get_jewish_day_of_month();
 
-        if month == JewishMonth::Nissan as i32 && day >= 16 {
+        if month == JewishMonth::Nissan  && day >= 16 {
             Some(day - 15)
-        } else if month == JewishMonth::Iyar as i32 {
+        } else if month == JewishMonth::Iyar {
             Some(day + 15)
-        } else if month == JewishMonth::Sivan as i32 && day < 6 {
+        } else if month == JewishMonth::Sivan  && day < 6 {
             Some(day + 44)
         } else {
             None
@@ -1277,11 +1283,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             Weekday::Sat => 7,
             Weekday::Sun => 6,
         };
-        // let days_to_shabbos = if day_of_week == Weekday::Sat {
-        //     7 // If today is Shabbos, get next Shabbos
-        // } else {
-        //     (Weekday::Sat as u8 - day_of_week as u8 + 7) % 7
-        // };
+   
 
         // Create a new calendar for the upcoming Shabbos
         let mut upcoming_year = self.get_jewish_year();

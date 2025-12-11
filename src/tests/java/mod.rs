@@ -62,6 +62,21 @@ pub fn init_jvm() -> Jvm {
     // This works on any thread; JNI allows re-attach on the same thread.
     Jvm::attach_thread().unwrap()
 }
+/// Create a random timezone that is compatible with Java's Timezone class
+pub fn random_timezone(rng: &mut impl Rng)->Tz{
+  let tz =   TZ_VARIANTS[rng.gen_range(0..TZ_VARIANTS.len())];
+  // DIFF: Java cannot handle the some timezones
+    // Tehran at the time of the revolution had a unclear timezone which Java and Rust handle differently
+    if tz.name() == "ROC"
+        || tz.name() == "America/Coyhaique"
+        || tz.name() == "GMT"
+        || tz.name() == "Asia/Tehran"
+        || tz.name() == "Iran"
+    {
+       return  random_timezone(rng);
+    }
+    tz
+}
 
 /// Converts a generic TimeZone to chrono_tz::Tz.
 ///
@@ -71,7 +86,7 @@ pub fn init_jvm() -> Jvm {
 ///
 /// # Panics
 /// This function may cause undefined behavior if `Tz` is not `chrono_tz::Tz`.
-pub fn tz_to_chrono_tz<Tz: chrono::TimeZone>(timezone: Tz) -> chrono_tz::Tz {
+pub(crate) fn tz_to_chrono_tz<Tz: chrono::TimeZone>(timezone: Tz) -> chrono_tz::Tz {
     // SAFETY: This is only safe when Tz is chrono_tz::Tz. In test contexts, we ensure
     // that all timezones are chrono_tz::Tz before calling this function.
     unsafe { std::mem::transmute_copy::<Tz, chrono_tz::Tz>(&timezone) }
@@ -164,8 +179,9 @@ mod java_tests {
         let mut rng = rand::thread_rng();
         let mut ran_once = false;
         for _ in 0..get_test_iterations() {
-            if let Some((geo_location, java_geo_location)) = create_geolocations(&jvm, &mut rng)
-                && let Some((other_geo_location, other_java_geo_location)) = create_geolocations(&jvm, &mut rng)
+            let tz = random_timezone(&mut rng);
+            if let Some((geo_location, java_geo_location)) = create_geolocations(&jvm, &mut rng,tz)
+                && let Some((other_geo_location, other_java_geo_location)) = create_geolocations(&jvm, &mut rng,tz)
             {
                 let date = random_date_time(&mut rng, &other_java_geo_location.timezone);
                 compare_geolocations(
@@ -189,7 +205,9 @@ mod java_tests {
         let java_calculator = JavaAstronomicalCalculator::new(&jvm);
 
         for _ in 0..get_test_iterations() {
-            if let Some((geo_location, java_geo_location)) = create_geolocations(&jvm, &mut rng) {
+            let tz = random_timezone(&mut rng);
+
+            if let Some((geo_location, java_geo_location)) = create_geolocations(&jvm, &mut rng,tz) {
                 let date = random_date_time(&mut rng, &java_geo_location.timezone);
                 let zenith = random_zenith(&mut rng);
                 let adjust_for_elevation = rng.gen_bool(0.5);
@@ -213,7 +231,9 @@ mod java_tests {
         let mut ran = false;
         let mut rng = rand::thread_rng();
         for _ in 0..get_test_iterations() {
-            let test_case = create_zmanim_calendars(&jvm, &mut rng);
+            let tz = random_timezone(&mut rng);
+
+            let test_case = create_zmanim_calendars(&jvm, &mut rng,tz);
             if test_case.is_none() {
                 continue;
             }

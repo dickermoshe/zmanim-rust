@@ -4,7 +4,7 @@ use crate::{
     geolocation::GeoLocationTrait,
     prelude::{GeoLocation, JewishCalendar, JewishCalendarTrait},
 };
-use chrono::{DateTime, Datelike, Days, Duration, Offset, TimeDelta, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, Days, Duration, NaiveDate, Offset, TimeDelta, TimeZone, Timelike, Utc};
 use core::time::Duration as StdDuration;
 use icu_calendar::{
     options::{DateAddOptions, Overflow},
@@ -22,17 +22,51 @@ pub struct ZmanimCalendar<Tz: TimeZone, G: GeoLocationTrait, N: AstronomicalCalc
     pub ateret_torah_sunset_offset: Duration,
 }
 
-impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocation, N> {
-    pub fn new(
-        date_time: DateTime<Tz>,
+impl<N: AstronomicalCalculatorTrait> ZmanimCalendar<Utc, GeoLocation, N> {
+    pub fn naive(
+        date: NaiveDate,
         geo_location: GeoLocation,
         calculator: N,
         use_astronomical_chatzos: bool,
         use_astronomical_chatzos_for_other_zmanim: bool,
         candle_lighting_offset: Duration,
         ateret_torah_sunset_offset: Duration,
-    ) -> Self {
-        Self {
+    ) -> Option<Self> {
+        // We do not actually need the timezone to perform calculations.
+        // It is only needed to convert gregorian dates to julian dates accurately 
+        // for locations whose timezones are more than 12 hours in either direction
+        // These locations are very close to the antimeridian. In order to support use cases
+        // where a user has no knowlage of any timezone, but only naive dates, we can
+        // assume that locations far from the antimeridian do not have a timezone offset >12:00 || < -12:00 
+        if geo_location.longitude > 160.0 || geo_location.longitude < -160.0{
+            return None;
+        }
+        Self::new(
+            date,
+            Utc,
+            geo_location,
+            calculator,
+            use_astronomical_chatzos,
+            use_astronomical_chatzos_for_other_zmanim,
+            candle_lighting_offset,
+            ateret_torah_sunset_offset,
+        )
+    }
+}
+
+impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocation, N> {
+    pub fn new(
+        date: NaiveDate,
+        timezone: Tz,
+        geo_location: GeoLocation,
+        calculator: N,
+        use_astronomical_chatzos: bool,
+        use_astronomical_chatzos_for_other_zmanim: bool,
+        candle_lighting_offset: Duration,
+        ateret_torah_sunset_offset: Duration,
+    ) -> Option<Self> {
+        let date_time = timezone.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).single()?;
+        Some(Self {
             date_time,
             geo_location,
             noaa_calculator: calculator,
@@ -40,8 +74,9 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocatio
             use_astronomical_chatzos_for_other_zmanim,
             candle_lighting_offset,
             ateret_torah_sunset_offset,
-        }
+        })
     }
+
     fn get_adjusted_date_time(&self, date_time: &DateTime<Tz>) -> Option<DateTime<Tz>> {
         let offset = self.get_geo_location().get_antimeridian_adjustment(date_time);
         if offset == 0 {

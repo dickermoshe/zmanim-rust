@@ -3,7 +3,7 @@
 mod java;
 use crate::prelude::JewishMonth;
 use chrono::{DateTime, Datelike, Duration, TimeZone};
-use chrono_tz::Tz;
+use chrono_tz::{TZ_VARIANTS, Tz};
 use rand::Rng;
 
 static STATIC_OFFSET_TIMEZONES: &[Tz] = &[
@@ -40,6 +40,8 @@ static STATIC_OFFSET_TIMEZONES: &[Tz] = &[
 
 static DEFAULT_TEST_YEARS: i64 = 100;
 static DEFAULT_TEST_YEARS_IN_MILLISECONDS: i64 = 1000 * 3600 * 24 * 365 * DEFAULT_TEST_YEARS;
+
+
 
 /// Generates a random DateTime in the range 1870-2070 with the given timezone.
 pub fn random_date_time(rng: &mut impl Rng, tz: &Tz) -> DateTime<chrono_tz::Tz> {
