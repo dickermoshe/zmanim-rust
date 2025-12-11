@@ -427,42 +427,7 @@ impl JewishHoliday {
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
-#[repr(u8)]
-pub enum DayOfWeek {
-    Sunday = 1,
-    Monday = 2,
-    Tuesday = 3,
-    Wednesday = 4,
-    Thursday = 5,
-    Friday = 6,
-    Shabbos = 7,
-}
-impl DayOfWeek {
-    pub fn en_string(&self) -> &str {
-        match self {
-            DayOfWeek::Sunday => "Sunday",
-            DayOfWeek::Monday => "Monday",
-            DayOfWeek::Tuesday => "Tuesday",
-            DayOfWeek::Wednesday => "Wednesday",
-            DayOfWeek::Thursday => "Thursday",
-            DayOfWeek::Friday => "Friday",
-            DayOfWeek::Shabbos => "Shabbos",
-        }
-    }
-    pub fn he_string(&self) -> &str {
-        match self {
-            DayOfWeek::Sunday => "ראשון",
-            DayOfWeek::Monday => "שני",
-            DayOfWeek::Tuesday => "שלישי",
-            DayOfWeek::Wednesday => "רביעי",
-            DayOfWeek::Thursday => "חמישי",
-            DayOfWeek::Friday => "שישי",
-            DayOfWeek::Shabbos => "שבת",
-        }
-    }
-}
+
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive, PartialOrd, Ord)]
 #[repr(u8)]
