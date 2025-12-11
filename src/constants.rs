@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use core::{array::IntoIter, fmt::Debug, iter::Flatten};
+use core::fmt::Debug;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 pub(crate) static _JULIAN_DAY_JAN_1_2000: f64 = 2451545.0;
 pub(crate) static _JULIAN_DAYS_PER_CENTURY: f64 = 36525.0;
@@ -483,41 +483,28 @@ pub enum JewishMonth {
 }
 
 impl JewishMonth {
-    /// Return an array of all the months between from and to, inclusive.
-    /// Returns an array with a length of 13 padded with None.
-    pub(crate) fn range_inclusive(from: JewishMonth, to: JewishMonth) -> Flatten<IntoIter<Option<JewishMonth>, 13>> {
-        let mut result = [None; 13];
-        let from_index = from as u8 - 1;
-        let to_index = to as u8 - 1;
-        if from_index > to_index {
-            return [None; 13].into_iter().flatten();
-        }
-        for i in from_index..=to_index {
-            // We can safely unwrap here because we know the value is valid
-            #[allow(clippy::unwrap_used)]
-            {
-                result[i as usize] = Some(JewishMonth::try_from(i).unwrap());
+    pub(crate) fn next(&self, is_leap_year: bool) -> JewishMonth {
+        return match self {
+            JewishMonth::Nissan => Self::Iyar,
+            JewishMonth::Iyar => Self::Sivan,
+            JewishMonth::Sivan => Self::Tammuz,
+            JewishMonth::Tammuz => Self::Av,
+            JewishMonth::Av => Self::Elul,
+            JewishMonth::Elul => Self::Tishrei,
+            JewishMonth::Tishrei => Self::Cheshvan,
+            JewishMonth::Cheshvan => Self::Kislev,
+            JewishMonth::Kislev => Self::Teves,
+            JewishMonth::Teves => Self::Shevat,
+            JewishMonth::Shevat => Self::Adar,
+            JewishMonth::Adar => {
+                if is_leap_year {
+                    Self::AdarII
+                } else {
+                    Self::Nissan
+                }
             }
-        }
-        result.into_iter().flatten()
-    }
-    /// Return an array of all the months between from and to, inclusive.
-    /// Returns an array with a length of 13 padded with None.
-    pub(crate) fn range(from: JewishMonth, to: JewishMonth) -> Flatten<IntoIter<Option<JewishMonth>, 13>> {
-        let mut result = [None; 13];
-        let from_index = from as u8;
-        let to_index = to as u8;
-        if from_index > to_index {
-            return [None; 13].into_iter().flatten();
-        }
-        for i in from_index..to_index {
-            // We can safely unwrap here because we know the value is valid
-            #[allow(clippy::unwrap_used)]
-            {
-                result[i as usize] = Some(JewishMonth::try_from(i).unwrap());
-            }
-        }
-        result.into_iter().flatten()
+            JewishMonth::AdarII => Self::Nissan,
+        };
     }
 
     pub fn en_string(&self, is_leap_year: bool) -> &str {

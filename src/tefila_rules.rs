@@ -2,7 +2,7 @@ use crate::constants::*;
 use crate::jewish_calendar::{JewishCalendar, JewishCalendarTrait};
 use crate::prelude::AstronomicalCalculatorTrait;
 
-use chrono::Datelike;
+use chrono::{Datelike, Weekday};
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq)]
@@ -108,9 +108,9 @@ impl<N: AstronomicalCalculatorTrait> TefilaRulesTrait<JewishCalendar<N>> for Tef
         let month = jewish_calendar.get_jewish_month();
         let day_of_week = jewish_calendar.get_day_of_week();
         #[allow(clippy::nonminimal_bool)]
-        if day_of_week == DayOfWeek::Shabbos
-            || (!self.tachanun_recited_sundays && day_of_week == DayOfWeek::Sunday)
-            || (!self.tachanun_recited_fridays && day_of_week == DayOfWeek::Friday)
+        if day_of_week == Weekday::Sat
+            || (!self.tachanun_recited_sundays && day_of_week == Weekday::Sun)
+            || (!self.tachanun_recited_fridays && day_of_week == Weekday::Fri)
             || month == JewishMonth::Nissan
             || (month == JewishMonth::Tishrei
                 && ((!self.tachanun_recited_end_of_tishrei && day > 8)
@@ -181,7 +181,7 @@ impl<N: AstronomicalCalculatorTrait> TefilaRulesTrait<JewishCalendar<N>> for Tef
         let tomorrow_yom_tov = tomorrow.get_yom_tov_index();
 
         if !self.tachanun_recited_mincha_all_year
-            || jewish_calendar.get_day_of_week() == DayOfWeek::Friday
+            || jewish_calendar.get_day_of_week() == Weekday::Fri
             || !self.is_tachanun_recited_shacharis(jewish_calendar)
             || (!self.is_tachanun_recited_shacharis(&tomorrow)
                 && tomorrow_yom_tov != Some(JewishHoliday::ErevRoshHashana)

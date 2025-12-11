@@ -10,7 +10,7 @@ use crate::prelude::{AstronomicalCalculatorTraitDefmt, MoladData};
 use crate::tefila_rules::TefilaRulesTrait;
 use crate::tests::java::{dt_to_java_calendar, dt_to_java_date, geolocation_to_java_geolocation, tz_to_java_timezone};
 use crate::{astronomical_calculator::AstronomicalCalculatorTrait, geolocation::GeoLocationTrait};
-use chrono::{DateTime, TimeZone};
+use chrono::{DateTime, TimeZone, Weekday};
 use chrono::{Duration, Utc};
 use chrono_tz::Tz;
 use j4rs::{Instance, InvocationArg, Jvm, Null};
@@ -1543,13 +1543,22 @@ impl<'a> JewishCalendarTrait for JavaJewishCalendar<'a> {
         self.jvm.to_rust::<u8>(java_result).unwrap()
     }
 
-    fn get_day_of_week(&self) -> crate::constants::DayOfWeek {
+    fn get_day_of_week(&self) -> Weekday {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getDayOfWeek", InvocationArg::empty())
             .unwrap();
         let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result.try_into().unwrap()
+        match java_result {
+            1 => Weekday::Sun,
+            2 => Weekday::Mon,
+            3 => Weekday::Tue,
+            4 => Weekday::Wed,
+            5 => Weekday::Thu,
+            6 => Weekday::Fri,
+            7 => Weekday::Sat,
+            _ => unreachable!(),
+        }
     }
 
     fn is_jewish_leap_year(&self) -> bool {

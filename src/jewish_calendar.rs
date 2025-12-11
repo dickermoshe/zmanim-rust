@@ -2,16 +2,18 @@ use core::fmt::Debug;
 
 use chrono::DateTime;
 use chrono::Datelike;
+
 use chrono::Days;
 use chrono::NaiveDate;
 use chrono::Utc;
+use chrono::Weekday;
 use icu_calendar::Date;
 use icu_calendar::Gregorian;
 use icu_calendar::cal::Hebrew;
 use icu_calendar::options::DateAddOptions;
 use icu_calendar::types::DateDuration;
 use icu_calendar::types::MonthCode;
-use icu_calendar::types::Weekday;
+use icu_calendar::types::Weekday as IcuWeekday;
 
 use crate::astronomical_calculator::AstronomicalCalculatorTrait;
 use crate::astronomical_calculator::get_julian_day;
@@ -34,7 +36,7 @@ pub trait JewishCalendarTrait {
     fn get_gregorian_day_of_month(&self) -> u8;
     fn get_molad_as_date(&self) -> Option<DateTime<Utc>>;
     fn get_molad_as_calendar(&self) -> Option<impl JewishCalendarTrait>;
-    fn get_day_of_week(&self) -> DayOfWeek;
+    fn get_day_of_week(&self) -> Weekday;
     fn is_jewish_leap_year(&self) -> bool;
     fn get_days_in_jewish_year(&self) -> i32;
     fn get_days_in_jewish_month(&self) -> u8;
@@ -368,13 +370,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
         JewishCalendar::<N>::get_days_in_jewish_year_static(year) % 10 == 3
     }
 
-    fn get_last_month_of_jewish_year(year: i32) -> JewishMonth {
-        if JewishCalendar::<N>::is_jewish_leap_year_static(year) {
-            JewishMonth::AdarII
-        } else {
-            JewishMonth::Adar
-        }
-    }
 
     fn molad_to_abs_date(chalakim: i64) -> i64 {
         _JEWISH_EPOCH + (chalakim / _CHALAKIM_PER_DAY)
@@ -586,16 +581,16 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
         self.get_gregorian_date().day_of_month().0
     }
 
-    fn get_day_of_week(&self) -> DayOfWeek {
+    fn get_day_of_week(&self) -> Weekday {
         let weekday = self.get_hebrew_date().day_of_week();
         match weekday {
-            Weekday::Sunday => DayOfWeek::Sunday,
-            Weekday::Monday => DayOfWeek::Monday,
-            Weekday::Tuesday => DayOfWeek::Tuesday,
-            Weekday::Wednesday => DayOfWeek::Wednesday,
-            Weekday::Thursday => DayOfWeek::Thursday,
-            Weekday::Friday => DayOfWeek::Friday,
-            Weekday::Saturday => DayOfWeek::Shabbos,
+            IcuWeekday::Sunday => Weekday::Sun,
+            IcuWeekday::Monday => Weekday::Mon,
+            IcuWeekday::Tuesday => Weekday::Tue,
+            IcuWeekday::Wednesday => Weekday::Wed,
+            IcuWeekday::Thursday => Weekday::Thu,
+            IcuWeekday::Friday => Weekday::Fri,
+            IcuWeekday::Saturday => Weekday::Sat,
         }
     }
 
@@ -634,25 +629,17 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
     fn get_days_since_start_of_jewish_year(&self) -> i32 {
         let year = self.get_jewish_year();
-        let month = self.get_jewish_month();
+        let current_month = self.get_jewish_month();
         let day = self.get_jewish_day_of_month();
 
+        let is_leap_year = self.is_jewish_leap_year();
         let mut elapsed_days: i32 = day as i32;
-        if month < JewishMonth::Tishrei {
-            for m in JewishMonth::range_inclusive(
-                JewishMonth::Tishrei,
-                JewishCalendar::<N>::get_last_month_of_jewish_year(year),
-            ) {
-                elapsed_days += JewishCalendar::<N>::get_days_in_jewish_month_static(m, year) as i32;
-            }
-            for m in JewishMonth::range(JewishMonth::Nissan, month) {
-                elapsed_days += JewishCalendar::<N>::get_days_in_jewish_month_static(m, year) as i32;
-            }
-        } else {
-            for m in JewishMonth::range(JewishMonth::Tishrei, month) {
-                elapsed_days += JewishCalendar::<N>::get_days_in_jewish_month_static(m, year) as i32;
-            }
+        let mut start = JewishMonth::Tishrei;
+        while start != current_month {
+            elapsed_days += JewishCalendar::<N>::get_days_in_jewish_month_static(start, year) as i32;
+            start = start.next(is_leap_year)
         }
+
         elapsed_days
     }
 
@@ -695,9 +682,9 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
                     return Some(JewishHoliday::IsruChag);
                 }
                 if self.use_modern_holidays
-                    && ((day == 26 && day_of_week == DayOfWeek::Thursday)
-                        || (day == 28 && day_of_week == DayOfWeek::Monday)
-                        || (day == 27 && day_of_week != DayOfWeek::Sunday && day_of_week != DayOfWeek::Friday))
+                    && ((day == 26 && day_of_week == Weekday::Thu)
+                        || (day == 28 && day_of_week == Weekday::Mon)
+                        || (day == 27 && day_of_week != Weekday::Sun && day_of_week != Weekday::Fri))
                 {
                     return Some(JewishHoliday::YomHaShoah);
                 }
@@ -705,15 +692,15 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
             JewishMonth::Iyar => {
                 if self.use_modern_holidays {
-                    if (day == 4 && day_of_week == DayOfWeek::Tuesday)
-                        || ((day == 3 || day == 2) && day_of_week == DayOfWeek::Wednesday)
-                        || (day == 5 && day_of_week == DayOfWeek::Monday)
+                    if (day == 4 && day_of_week == Weekday::Tue)
+                        || ((day == 3 || day == 2) && day_of_week == Weekday::Wed)
+                        || (day == 5 && day_of_week == Weekday::Mon)
                     {
                         return Some(JewishHoliday::YomHazikaron);
                     }
-                    if (day == 5 && day_of_week == DayOfWeek::Wednesday)
-                        || ((day == 4 || day == 3) && day_of_week == DayOfWeek::Thursday)
-                        || (day == 6 && day_of_week == DayOfWeek::Tuesday)
+                    if (day == 5 && day_of_week == Weekday::Wed)
+                        || ((day == 4 || day == 3) && day_of_week == Weekday::Thu)
+                        || (day == 6 && day_of_week == Weekday::Tue)
                     {
                         return Some(JewishHoliday::YomHaatzmaut);
                     }
@@ -742,13 +729,13 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             }
 
             JewishMonth::Tammuz => {
-                if (day == 17 && day_of_week != DayOfWeek::Shabbos) || (day == 18 && day_of_week == DayOfWeek::Sunday) {
+                if (day == 17 && day_of_week != Weekday::Sat) || (day == 18 && day_of_week == Weekday::Sun) {
                     return Some(JewishHoliday::SeventeenthOfTammuz);
                 }
             }
 
             JewishMonth::Av => {
-                if (day_of_week == DayOfWeek::Sunday && day == 10) || (day_of_week != DayOfWeek::Shabbos && day == 9) {
+                if (day_of_week == Weekday::Sun && day == 10) || (day_of_week != Weekday::Sat && day == 9) {
                     return Some(JewishHoliday::TishahBav);
                 }
                 if day == 15 {
@@ -766,7 +753,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
                 if day == 1 || day == 2 {
                     return Some(JewishHoliday::RoshHashana);
                 }
-                if (day == 3 && day_of_week != DayOfWeek::Shabbos) || (day == 4 && day_of_week == DayOfWeek::Sunday) {
+                if (day == 3 && day_of_week != Weekday::Sat) || (day == 4 && day_of_week == Weekday::Sun) {
                     return Some(JewishHoliday::FastOfGedalyah);
                 }
                 if day == 9 {
@@ -824,8 +811,8 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
             JewishMonth::Adar => {
                 if !self.is_jewish_leap_year() {
-                    if ((day == 11 || day == 12) && day_of_week == DayOfWeek::Thursday)
-                        || (day == 13 && !(day_of_week == DayOfWeek::Friday || day_of_week == DayOfWeek::Shabbos))
+                    if ((day == 11 || day == 12) && day_of_week == Weekday::Thu)
+                        || (day == 13 && !(day_of_week == Weekday::Fri || day_of_week == Weekday::Sat))
                     {
                         return Some(JewishHoliday::FastOfEsther);
                     }
@@ -846,8 +833,8 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             }
 
             JewishMonth::AdarII => {
-                if ((day == 11 || day == 12) && day_of_week == DayOfWeek::Thursday)
-                    || (day == 13 && !(day_of_week == DayOfWeek::Friday || day_of_week == DayOfWeek::Shabbos))
+                if ((day == 11 || day == 12) && day_of_week == Weekday::Thu)
+                    || (day == 13 && !(day_of_week == Weekday::Fri || day_of_week == Weekday::Sat))
                 {
                     return Some(JewishHoliday::FastOfEsther);
                 }
@@ -898,7 +885,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn is_assur_bemelacha(&self) -> bool {
-        self.get_day_of_week() == DayOfWeek::Shabbos || self.is_yom_tov_assur_bemelacha()
+        self.get_day_of_week() == Weekday::Sat || self.is_yom_tov_assur_bemelacha()
     }
 
     fn has_candle_lighting(&self) -> bool {
@@ -906,7 +893,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn is_tomorrow_shabbos_or_yom_tov(&self) -> bool {
-        self.get_day_of_week() == DayOfWeek::Friday || self.is_erev_yom_tov() || self.is_erev_yom_tov_sheni()
+        self.get_day_of_week() == Weekday::Fri || self.is_erev_yom_tov() || self.is_erev_yom_tov_sheni()
     }
 
     fn is_erev_yom_tov_sheni(&self) -> bool {
@@ -1085,7 +1072,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn get_parshah(&self) -> Option<Parsha> {
-        if self.get_day_of_week() != DayOfWeek::Shabbos {
+        if self.get_day_of_week() != Weekday::Sat {
             return None;
         }
 
@@ -1241,12 +1228,12 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
         }
 
         // On 29th if not Friday or Shabbos
-        if day == 29 && day_of_week != DayOfWeek::Friday && day_of_week != DayOfWeek::Shabbos {
+        if day == 29 && day_of_week != Weekday::Fri && day_of_week != Weekday::Sat {
             return true;
         }
 
         // On 27th or 28th if Thursday (moved back from Friday/Shabbos)
-        (day == 27 || day == 28) && day_of_week == DayOfWeek::Thursday
+        (day == 27 || day == 28) && day_of_week == Weekday::Thu
     }
 
     fn is_be_hab(&self) -> bool {
@@ -1257,21 +1244,21 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
         // BeHaB is only in Cheshvan and Iyar
         if month == JewishMonth::Cheshvan || month == JewishMonth::Iyar {
             // Monday between 5-17 or Thursday between 8-13
-            return (day_of_week == DayOfWeek::Monday && day > 4 && day < 18)
-                || (day_of_week == DayOfWeek::Thursday && day > 7 && day < 14);
+            return (day_of_week == Weekday::Mon && day > 4 && day < 18)
+                || (day_of_week == Weekday::Thu && day > 7 && day < 14);
         }
         false
     }
 
     fn is_machar_chodesh(&self) -> bool {
         // Shabbos and tomorrow is Rosh Chodesh (30th or 29th of month)
-        self.get_day_of_week() == DayOfWeek::Shabbos
+        self.get_day_of_week() == Weekday::Sat
             && (self.get_jewish_day_of_month() == 30 || self.get_jewish_day_of_month() == 29)
     }
 
     fn is_shabbos_mevorchim(&self) -> bool {
         // Shabbos between 23rd and 29th (but not in Elul)
-        self.get_day_of_week() == DayOfWeek::Shabbos
+        self.get_day_of_week() == Weekday::Sat
             && self.get_jewish_day_of_month() >= 23
             && self.get_jewish_day_of_month() <= 29
             && self.get_jewish_month() != JewishMonth::Elul
@@ -1281,11 +1268,20 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     fn get_upcoming_parshah(&self) -> Option<Parsha> {
         // Calculate days to next Shabbos
         let day_of_week = self.get_day_of_week();
-        let days_to_shabbos = if day_of_week == DayOfWeek::Shabbos {
-            7 // If today is Shabbos, get next Shabbos
-        } else {
-            (DayOfWeek::Shabbos as u8 - day_of_week as u8 + 7) % 7
+        let days_to_shabbos = match day_of_week {
+            Weekday::Mon => 5,
+            Weekday::Tue => 4,
+            Weekday::Wed => 3,
+            Weekday::Thu => 2,
+            Weekday::Fri => 1,
+            Weekday::Sat => 7,
+            Weekday::Sun => 6,
         };
+        // let days_to_shabbos = if day_of_week == Weekday::Sat {
+        //     7 // If today is Shabbos, get next Shabbos
+        // } else {
+        //     (Weekday::Sat as u8 - day_of_week as u8 + 7) % 7
+        // };
 
         // Create a new calendar for the upcoming Shabbos
         let mut upcoming_year = self.get_jewish_year();
@@ -1355,7 +1351,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn get_special_shabbos(&self) -> Option<Parsha> {
-        if self.get_day_of_week() != DayOfWeek::Shabbos {
+        if self.get_day_of_week() != Weekday::Sat {
             return None;
         }
 
@@ -1505,11 +1501,11 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             self.get_jewish_month() == JewishMonth::Cheshvan && self.get_jewish_day_of_month() == 7
         } else {
             // Not recited on Friday night
-            if self.get_day_of_week() == DayOfWeek::Shabbos {
+            if self.get_day_of_week() == Weekday::Sat {
                 return false;
             }
             // On Sunday, could be start date or delayed from Shabbos
-            if self.get_day_of_week() == DayOfWeek::Sunday {
+            if self.get_day_of_week() == Weekday::Sun {
                 let elapsed = self.get_tekufas_tishrei_elapsed_days();
                 elapsed == 48 || elapsed == 47
             } else {
@@ -1524,11 +1520,11 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             self.get_jewish_month() == JewishMonth::Cheshvan && self.get_jewish_day_of_month() == 6
         } else {
             // Not recited on Friday night
-            if self.get_day_of_week() == DayOfWeek::Friday {
+            if self.get_day_of_week() == Weekday::Fri {
                 return false;
             }
             // On Motzai Shabbos, could be start date or delayed from Friday night
-            if self.get_day_of_week() == DayOfWeek::Shabbos {
+            if self.get_day_of_week() == Weekday::Sat {
                 let elapsed = self.get_tekufas_tishrei_elapsed_days();
                 elapsed == 47 || elapsed == 46
             } else {
