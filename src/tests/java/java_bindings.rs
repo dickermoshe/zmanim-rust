@@ -12,24 +12,19 @@ use crate::tests::java::{dt_to_java_calendar, dt_to_java_date, geolocation_to_ja
 use crate::{astronomical_calculator::AstronomicalCalculatorTrait, geolocation::GeoLocationTrait};
 use chrono::{DateTime, TimeZone, Weekday};
 use chrono::{Duration, Utc};
-use chrono_tz::Tz;
 use j4rs::{Instance, InvocationArg, Jvm, Null};
 
 use crate::{astronomical_calculator::NOAACalculator, constants::_SolarEvent, zmanim_calendar::ZmanimCalendarTrait};
 pub struct JavaGeoLocation<'a> {
     pub jvm: &'a Jvm,
     pub instance: Instance,
-    pub timezone: Tz,
+    pub timezone_id: &'a str,
 }
 
 impl<'a> JavaGeoLocation<'a> {
-    pub fn new(jvm: &'a Jvm, latitude: f64, longitude: f64, elevation: f64, timezone: Tz) -> Option<Self> {
-        let java_timezone = tz_to_java_timezone(jvm, timezone);
+    pub fn new(jvm: &'a Jvm, latitude: f64, longitude: f64, elevation: f64, timezone_id: &'a str) -> Option<Self> {
+        let java_timezone = tz_to_java_timezone(jvm, timezone_id);
 
-        // DIFF: Java will return a GMT timezone if it is unable to find a timezone
-        // However we will return None if this is the case
-        java_timezone.as_ref()?;
-        let java_timezone = java_timezone.unwrap();
         let instance = jvm
             .create_instance(
                 "com.kosherjava.zmanim.util.GeoLocation",
@@ -49,7 +44,7 @@ impl<'a> JavaGeoLocation<'a> {
         Some(Self {
             jvm,
             instance,
-            timezone,
+            timezone_id,
         })
     }
 }
@@ -157,7 +152,7 @@ impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
     }
 
     fn get_local_mean_time_offset<Tz: chrono::TimeZone>(&self, date: &chrono::DateTime<Tz>) -> chrono::Duration {
-        let java_date = dt_to_java_calendar(self.jvm, date).unwrap();
+        let java_date = dt_to_java_calendar(self.jvm, date, self.timezone_id).unwrap();
         let result = self
             .jvm
             .to_rust::<i64>(
@@ -174,7 +169,7 @@ impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
     }
 
     fn get_antimeridian_adjustment<Tz: chrono::TimeZone>(&self, date: &chrono::DateTime<Tz>) -> i8 {
-        let java_date = dt_to_java_calendar(self.jvm, date).unwrap();
+        let java_date = dt_to_java_calendar(self.jvm, date, self.timezone_id).unwrap();
         self.jvm
             .to_rust::<i32>(
                 self.jvm
@@ -192,6 +187,7 @@ impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
 pub struct JavaAstronomicalCalculator<'a> {
     pub jvm: &'a Jvm,
     pub instance: Instance,
+    pub timezone_id: &'a str,
 }
 impl<'a> Debug for JavaAstronomicalCalculator<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -199,11 +195,15 @@ impl<'a> Debug for JavaAstronomicalCalculator<'a> {
     }
 }
 impl<'a> JavaAstronomicalCalculator<'a> {
-    pub fn new(jvm: &'a Jvm) -> Self {
+    pub fn new(jvm: &'a Jvm, timezone_id: &'a str) -> Self {
         let instance = jvm
             .create_instance("com.kosherjava.zmanim.util.NOAACalculator", InvocationArg::empty())
             .unwrap();
-        Self { jvm, instance }
+        Self {
+            jvm,
+            instance,
+            timezone_id,
+        }
     }
 }
 #[cfg(feature = "defmt")]
@@ -221,8 +221,8 @@ impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
         date_time: &chrono::DateTime<Tz>,
         geo_location: &G,
     ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
+        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
+        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
         let result = self
             .jvm
             .invoke(
@@ -242,8 +242,8 @@ impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
         date_time: &chrono::DateTime<Tz>,
         geo_location: &G,
     ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
+        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
+        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
         let result = self
             .jvm
             .invoke(
@@ -265,8 +265,8 @@ impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
         zenith: f64,
         adjust_for_elevation: bool,
     ) -> Option<f64> {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
+        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
+        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
         let result = self
             .jvm
             .invoke(
@@ -295,8 +295,8 @@ impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
         zenith: f64,
         adjust_for_elevation: bool,
     ) -> Option<f64> {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
+        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
+        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
         let result = self
             .jvm
             .invoke(
@@ -323,8 +323,8 @@ impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
         date_time: &chrono::DateTime<Tz>,
         geo_location: &G,
     ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
+        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
+        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
         let result = self
             .jvm
             .invoke(
@@ -344,8 +344,8 @@ impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
         date_time: &chrono::DateTime<Tz>,
         geo_location: &G,
     ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, date_time.timezone()).unwrap();
+        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
+        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
         let result = self
             .jvm
             .invoke(
@@ -374,6 +374,17 @@ pub struct JavaZmanimCalendar<'a, Tz: TimeZone> {
 }
 impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
     fn get_java_date_millis(&self, date_instance: &Instance) -> Option<i64> {
+        //check for null
+        let is_null = self
+            .jvm
+            .check_equals(
+                date_instance,
+                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap(),
+            )
+            .unwrap();
+        if is_null {
+            return None;
+        }
         let millis_result = self.jvm.invoke(date_instance, "getTime", InvocationArg::empty());
         if millis_result.is_err() {
             return None;
@@ -386,17 +397,19 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
         let millis = self.get_java_date_millis(date_instance)?;
         Some(self.date_time.timezone().timestamp_millis_opt(millis).unwrap())
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         jvm: &'a Jvm,
         date_time: DateTime<Tz>,
+        timezone_id: &str,
         geo_location: GeoLocation,
         candle_lighting_offset: Duration,
         use_astronomical_chatzos: bool,
         use_astronomical_chatzos_for_other_zmanim: bool,
         ateret_torah_sunset_offset: Duration,
     ) -> Self {
-        let java_geolocation = geolocation_to_java_geolocation(jvm, &geo_location, date_time.timezone()).unwrap();
-        let java_date_time = dt_to_java_calendar(jvm, &date_time).unwrap();
+        let java_geolocation = geolocation_to_java_geolocation(jvm, &geo_location, timezone_id).unwrap();
+        let java_date_time = dt_to_java_calendar(jvm, &date_time, timezone_id).unwrap();
         let java_zmanim_calendar = jvm
             .create_instance(
                 "com.kosherjava.zmanim.ComplexZmanimCalendar",

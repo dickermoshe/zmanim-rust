@@ -1,6 +1,6 @@
 //! A set of functions which generate random pairs of Java and Rust objects.
 //! This is used in our testing framework to create random test cases.
-use chrono::{Datelike, Duration};
+use chrono::{Datelike, Duration, Utc};
 use j4rs::Jvm;
 use rand::Rng;
 
@@ -13,16 +13,14 @@ use crate::{
 pub fn create_geolocations<'a, Rng: rand::Rng>(
     jvm: &'a Jvm,
     rng: &mut Rng,
-    tz: chrono_tz::Tz   
+    timezone_id: &'a str,
 ) -> Option<(GeoLocation, JavaGeoLocation<'a>)> {
     let latitude = rng.gen_range(-91.0..=91.0);
     let longitude = rng.gen_range(-181.0..=181.0);
     let elevation = rng.gen_range(-1.0..=1000.0);
-   
-    
 
     let geo_location = GeoLocation::new(latitude, longitude, elevation);
-    let java_geo_location = JavaGeoLocation::new(jvm, latitude, longitude, elevation, tz);
+    let java_geo_location = JavaGeoLocation::new(jvm, latitude, longitude, elevation, timezone_id);
     // Ensure both are some or none
     assert_eq!(
         geo_location.is_some(),
@@ -31,7 +29,7 @@ pub fn create_geolocations<'a, Rng: rand::Rng>(
         latitude,
         longitude,
         elevation,
-        tz
+        timezone_id
     );
     if geo_location.is_none() || java_geo_location.is_none() {
         return None;
@@ -44,14 +42,15 @@ pub fn create_geolocations<'a, Rng: rand::Rng>(
 pub fn create_zmanim_calendars<'a>(
     jvm: &'a Jvm,
     rng: &mut impl Rng,
-    tz:chrono_tz::Tz
+    tz: chrono_tz::Tz,
+    timezone_id: &str,
 ) -> Option<(
     ZmanimCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>,
     JavaZmanimCalendar<'a, chrono_tz::Tz>,
 )> {
-    let (geo_location, java_geo_location) = create_geolocations(jvm, rng,tz)?;
+    let (geo_location, _) = create_geolocations(jvm, rng, timezone_id)?;
 
-    let date_time = random_date_time(rng, &java_geo_location.timezone);
+    let date_time = random_date_time(rng, STATIC_OFFSET_TIMEZONES.contains(&tz), tz);
     let candle_lighting_offset = Duration::minutes(rng.gen_range(0..=60));
     let use_astronomical_chatzos = rng.gen_bool(0.5);
     let use_astronomical_chatzos_for_other_zmanim = rng.gen_bool(0.5);
@@ -70,6 +69,44 @@ pub fn create_zmanim_calendars<'a>(
     let java_calendar = JavaZmanimCalendar::new(
         jvm,
         date_time,
+        timezone_id,
+        geo_location,
+        candle_lighting_offset,
+        use_astronomical_chatzos,
+        use_astronomical_chatzos_for_other_zmanim,
+        ateret_torah_sunset_offset,
+    );
+
+    Some((rust_calendar, java_calendar))
+}
+pub fn create_zmanim_calendars_naive<'a>(
+    jvm: &'a Jvm,
+    rng: &mut impl Rng,
+) -> Option<(
+    ZmanimCalendar<Utc, GeoLocation, NOAACalculator>,
+    JavaZmanimCalendar<'a, Utc>,
+)> {
+    let (geo_location, _) = create_geolocations(jvm, rng, "UTC")?;
+
+    let date_time = random_date_time(rng, true, Utc);
+    let candle_lighting_offset = Duration::minutes(rng.gen_range(0..=60));
+    let use_astronomical_chatzos = rng.gen_bool(0.5);
+    let use_astronomical_chatzos_for_other_zmanim = rng.gen_bool(0.5);
+    let ateret_torah_sunset_offset = Duration::minutes(rng.gen_range(0..=60));
+
+    let rust_calendar = ZmanimCalendar::naive(
+        date_time.naive_local().date(),
+        geo_location.clone(),
+        NOAACalculator,
+        use_astronomical_chatzos,
+        use_astronomical_chatzos_for_other_zmanim,
+        candle_lighting_offset,
+        ateret_torah_sunset_offset,
+    )?;
+    let java_calendar = JavaZmanimCalendar::new(
+        jvm,
+        date_time,
+        "UTC",
         geo_location,
         candle_lighting_offset,
         use_astronomical_chatzos,
@@ -90,7 +127,7 @@ pub fn create_jewish_calendars<'a>(
     let use_modern_holidays = rng.gen_bool(0.5);
 
     if use_gregorian_date {
-        let date_time = random_date_time(rng, &chrono_tz::Tz::UTC);
+        let date_time = random_date_time(rng, true, chrono_tz::Tz::UTC);
         let message = format!(
             "year: {}, month: {}, day: {}, in_israel: {}, is_mukaf_choma: {}, use_modern_holidays: {}",
             date_time.year(),

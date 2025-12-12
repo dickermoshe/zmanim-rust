@@ -33,12 +33,12 @@ impl<N: AstronomicalCalculatorTrait> ZmanimCalendar<Utc, GeoLocation, N> {
         ateret_torah_sunset_offset: Duration,
     ) -> Option<Self> {
         // We do not actually need the timezone to perform calculations.
-        // It is only needed to convert gregorian dates to julian dates accurately 
+        // It is only needed to convert gregorian dates to julian dates accurately
         // for locations whose timezones are more than 12 hours in either direction
         // These locations are very close to the antimeridian. In order to support use cases
         // where a user has no knowlage of any timezone, but only naive dates, we can
-        // assume that locations far from the antimeridian do not have a timezone offset >12:00 || < -12:00 
-        if geo_location.longitude > 160.0 || geo_location.longitude < -160.0{
+        // assume that locations far from the antimeridian do not have a timezone offset >12:00 || < -12:00
+        if geo_location.longitude > 160.0 || geo_location.longitude < -160.0 {
             return None;
         }
         Self::new(
@@ -55,6 +55,7 @@ impl<N: AstronomicalCalculatorTrait> ZmanimCalendar<Utc, GeoLocation, N> {
 }
 
 impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocation, N> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         date: NaiveDate,
         timezone: Tz,
@@ -282,10 +283,6 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendarTrait<Tz, GeoLo
         tzais: Option<&DateTime<Tz>>,
     ) -> Option<DateTime<Tz>> {
         let jewish_calendar = self._get_jewish_calendar()?;
-        println!(
-            "jewish_calendar.get_jewish_day_of_month() = {}",
-            jewish_calendar.get_jewish_day_of_month()
-        );
         if jewish_calendar.get_jewish_day_of_month() < 4 || jewish_calendar.get_jewish_day_of_month() > 9 {
             return None;
         }

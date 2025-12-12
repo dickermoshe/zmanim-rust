@@ -90,6 +90,7 @@ pub fn compare_astronomical_calculators<'a>(
         &format!("getSolarElevation of {:?} at {:?}", rust_geo_location, date),
     );
 }
+
 pub fn compare_geolocations<'a>(
     rust_geolocation: &GeoLocation,
     java_geolocation: &JavaGeoLocation<'a>,
@@ -163,23 +164,23 @@ pub fn compare_geolocations<'a>(
     );
 }
 #[allow(clippy::too_many_arguments)]
-pub fn compare_zmanim_calendars<'a>(
-    rust_calendar: &ZmanimCalendar<chrono_tz::Tz, GeoLocation, NOAACalculator>,
-    java_calendar: &JavaZmanimCalendar<'a, chrono_tz::Tz>,
+pub fn compare_zmanim_calendars<'a, Tz: TimeZone + std::fmt::Debug>(
+    rust_calendar: &ZmanimCalendar<Tz, GeoLocation, NOAACalculator>,
+    java_calendar: &JavaZmanimCalendar<'a, Tz>,
     offset_zenith: f64,
     zenith: f64,
     hours: f64,
-    start_of_day: &DateTime<chrono_tz::Tz>,
-    end_of_day: &DateTime<chrono_tz::Tz>,
+    start_of_day: &DateTime<Tz>,
+    end_of_day: &DateTime<Tz>,
     degrees: f64,
     sunset: bool,
-    start_of_half_day: &DateTime<chrono_tz::Tz>,
-    end_of_half_day: &DateTime<chrono_tz::Tz>,
-    start_of_day_option: Option<&DateTime<chrono_tz::Tz>>,
-    end_of_day_option: Option<&DateTime<chrono_tz::Tz>>,
+    start_of_half_day: &DateTime<Tz>,
+    end_of_half_day: &DateTime<Tz>,
+    start_of_day_option: Option<&DateTime<Tz>>,
+    end_of_day_option: Option<&DateTime<Tz>>,
     synchronous: bool,
-    alos: Option<&DateTime<chrono_tz::Tz>>,
-    tzais: Option<&DateTime<chrono_tz::Tz>>,
+    alos: Option<&DateTime<Tz>>,
+    tzais: Option<&DateTime<Tz>>,
 ) {
     let rust_sunrise = rust_calendar.get_sunrise();
     let java_sunrise = java_calendar.get_sunrise();
@@ -536,6 +537,7 @@ pub fn compare_zmanim_calendars<'a>(
         ),
     );
 }
+
 pub fn compare_jewish_calendars(
     rust_calendar: &impl JewishCalendarTrait,
     java_calendar: &impl JewishCalendarTrait,

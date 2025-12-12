@@ -427,7 +427,6 @@ impl JewishHoliday {
     }
 }
 
-
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, TryFromPrimitive, PartialOrd, Ord)]
 #[repr(u8)]
@@ -449,7 +448,7 @@ pub enum JewishMonth {
 
 impl JewishMonth {
     pub(crate) fn next(&self, is_leap_year: bool) -> JewishMonth {
-        return match self {
+        match self {
             JewishMonth::Nissan => Self::Iyar,
             JewishMonth::Iyar => Self::Sivan,
             JewishMonth::Sivan => Self::Tammuz,
@@ -469,7 +468,7 @@ impl JewishMonth {
                 }
             }
             JewishMonth::AdarII => Self::Nissan,
-        };
+        }
     }
 
     pub fn en_string(&self, is_leap_year: bool) -> &str {
@@ -676,8 +675,6 @@ impl BavliTractate {
             BavliTractate::Niddah => "נדה",
         }
     }
-
-    
 }
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]

@@ -3,10 +3,10 @@
 mod java;
 use crate::prelude::JewishMonth;
 use chrono::{DateTime, Datelike, Duration, TimeZone};
-use chrono_tz::{TZ_VARIANTS, Tz};
+use chrono_tz::Tz;
 use rand::Rng;
 
-static STATIC_OFFSET_TIMEZONES: &[Tz] = &[
+pub static STATIC_OFFSET_TIMEZONES: &[Tz] = &[
     Tz::Etc__GMT,
     Tz::Etc__GMTPlus0,
     Tz::Etc__GMTPlus1,
@@ -41,13 +41,11 @@ static STATIC_OFFSET_TIMEZONES: &[Tz] = &[
 static DEFAULT_TEST_YEARS: i64 = 100;
 static DEFAULT_TEST_YEARS_IN_MILLISECONDS: i64 = 1000 * 3600 * 24 * 365 * DEFAULT_TEST_YEARS;
 
-
-
 /// Generates a random DateTime in the range 1870-2070 with the given timezone.
-pub fn random_date_time(rng: &mut impl Rng, tz: &Tz) -> DateTime<chrono_tz::Tz> {
+pub fn random_date_time<Tz: TimeZone>(rng: &mut impl Rng, is_static_offset: bool, tz: Tz) -> DateTime<Tz> {
     // Java and Rust handle historical timezones very differently.
     // Therefor, if the timezone is not a static offset, we will only generate dates after 1970.
-    let start = if STATIC_OFFSET_TIMEZONES.contains(tz) {
+    let start = if is_static_offset {
         -DEFAULT_TEST_YEARS_IN_MILLISECONDS
     } else {
         0
@@ -113,15 +111,15 @@ pub fn assert_almost_equal_i64_option(a: &Option<i64>, b: &Option<i64>, diff: i6
     }
 }
 /// Asserts that two DateTime values are approximately equal within a 50 millisecond tolerance.
-pub fn assert_almost_equal_datetime<Tz: TimeZone>(a: &DateTime<Tz>, b: &DateTime<Tz>, message: &str) {
+pub fn assert_almost_equal_datetime<Tz: TimeZone, Tz2: TimeZone>(a: &DateTime<Tz>, b: &DateTime<Tz2>, message: &str) {
     let result = (a.timestamp_millis() - b.timestamp_millis()).abs() < 50;
     let distance = (a.timestamp_millis() - b.timestamp_millis()).abs();
     assert!(result, "Error: {:?} vs {:?}, distance: {}, {}", a, b, distance, message);
 }
 /// Asserts that two optional DateTime values are approximately equal.
-pub fn assert_almost_equal_datetime_option(
-    a: &Option<DateTime<chrono_tz::Tz>>,
-    b: &Option<DateTime<chrono_tz::Tz>>,
+pub fn assert_almost_equal_datetime_option<Tz1: TimeZone, Tz2: TimeZone>(
+    a: &Option<DateTime<Tz1>>,
+    b: &Option<DateTime<Tz2>>,
     message: &str,
 ) {
     match (a, b) {
@@ -151,7 +149,7 @@ pub fn assert_almost_equal_duration_option(a: &Option<Duration>, b: &Option<Dura
 
 /// Generates a random Hebrew date in the range 1870-2070.
 pub fn random_hebrew_date(rng: &mut impl Rng) -> (i32, JewishMonth, u8) {
-    let dt = random_date_time(rng, &chrono_tz::Tz::UTC);
+    let dt = random_date_time(rng, true, chrono_tz::Tz::UTC);
     let year = dt.year() + 3760; // 3760 is the difference between the Gregorian and Hebrew years
 
     let month = match rng.gen_range(1..=13) {

@@ -3,8 +3,6 @@ TODO: Get changes merged into kosher jav
 TODO: Add no_std tests
 TODO: document that users shold create with datetimes that have 0:00 oclock
 ensure we can compile no_Std
-no tehran in tests
-fix bad.md
 
 - Include a changelog
 - restrict the submodules to a specific tag
