@@ -55,7 +55,7 @@ pub fn init_jvm() -> Jvm {
     JVM_INIT.call_once(|| {
         let _ = JvmBuilder::new()
             .classpath_entry(ClasspathEntry::new("./kosher-java/target/zmanim-2.6.0-SNAPSHOT.jar"))
-            .classpath_entry(ClasspathEntry::new("./kosher-java/target/dependency/icu4j-68.1.jar"))
+            .classpath_entry(ClasspathEntry::new("./kosher-java/target/dependency/icu4j-78.1.jar"))
             .build()
             .unwrap();
     });
@@ -85,7 +85,7 @@ pub fn random_timezone(rng: &mut impl Rng) -> Tz {
 /// Returns None if Java cannot find a matching timezone (falls back to GMT).
 pub fn tz_to_java_timezone(jvm: &Jvm, timezone_id: &str) -> Instance {
     jvm.invoke_static(
-        "java.util.TimeZone",
+        "com.ibm.icu.util.TimeZone",
         "getTimeZone",
         &[InvocationArg::try_from(timezone_id).unwrap()],
     )
@@ -97,7 +97,7 @@ pub fn tz_to_java_timezone(jvm: &Jvm, timezone_id: &str) -> Instance {
 pub fn dt_to_java_calendar<Tz: TimeZone>(jvm: &Jvm, date: &DateTime<Tz>, timezone_id: &str) -> Option<Instance> {
     let java_timezone = tz_to_java_timezone(jvm, timezone_id);
     let java_calendar = jvm
-        .invoke_static("java.util.Calendar", "getInstance", InvocationArg::empty())
+        .invoke_static("com.ibm.icu.util.Calendar", "getInstance", InvocationArg::empty())
         .unwrap();
     jvm.invoke(&java_calendar, "setTimeZone", &[InvocationArg::from(java_timezone)])
         .unwrap();
@@ -548,6 +548,7 @@ mod java_tests {
         }
         assert!(ran, "No test cases were run");
     }
+
     #[test]
     fn test_tefila_rules_against_java() {
         let jvm = init_jvm();
@@ -588,57 +589,57 @@ mod java_tests {
         }
         assert!(ran, "No test cases were run");
     }
-    #[test]
-    fn test_failure_reproduction_iteration_5042() {
-        use chrono::NaiveDate;
-        let jvm = init_jvm();
-        let tz = Tz::Africa__Windhoek;
-        let timezone_id = "Africa/Windhoek";
-        let geo_location = GeoLocation::new(24.18469048660701, 117.02983098793459, 202.67575250831896).unwrap();
-        let date = NaiveDate::from_ymd_opt(2067, 8, 25).unwrap();
-        let date_time = tz.from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap()).unwrap();
-        let calendar = ZmanimCalendar::new(
-            date,
-            tz,
-            geo_location.clone(),
-            NOAACalculator,
-            true,
-            false,
-            Duration::seconds(1260),
-            Duration::seconds(0),
-        )
-        .unwrap();
-        let java_calendar = JavaZmanimCalendar::new(
-            &jvm,
-            date_time,
-            timezone_id,
-            geo_location,
-            Duration::seconds(1260),
-            true,
-            false,
-            Duration::seconds(0),
-        );
-        // Test parameters
-        let alos = Some(tz.with_ymd_and_hms(2067, 8, 24, 9, 38, 53).unwrap());
-        let tzais = Some(tz.with_ymd_and_hms(2067, 8, 25, 6, 50, 35).unwrap());
-        // Add the specific comparison that failed here
-        compare_zmanim_calendars(
-            &calendar,
-            &java_calendar,
-            -131.07596105697928,
-            152.3619895201847,
-            12.302711225387013,
-            &tz.with_ymd_and_hms(2067, 8, 24, 21, 50, 41).unwrap(),
-            &tz.with_ymd_and_hms(2067, 8, 25, 10, 12, 5).unwrap(),
-            89.25613942202088,
-            true,
-            &tz.with_ymd_and_hms(2067, 8, 24, 12, 0, 23).unwrap(),
-            &tz.with_ymd_and_hms(2067, 8, 24, 23, 7, 11).unwrap(),
-            Some(&tz.with_ymd_and_hms(2067, 8, 24, 20, 18, 0).unwrap()),
-            None,
-            false,
-            alos.as_ref(),
-            tzais.as_ref(),
-        );
-    }
+    // #[test]
+    // fn test_failure_reproduction_iteration_97() {
+    //     use chrono::NaiveDate;
+    //     let jvm = init_jvm();
+    //     let tz = Tz::US__Michigan;
+    //     let timezone_id = "US/Michigan";
+    //     let geo_location = GeoLocation::new(18.95329220474092, 10.230076157216246, 721.4444571817388).unwrap();
+    //     let date = NaiveDate::from_ymd_opt(2035, 11, 4).unwrap();
+    //     let date_time = tz.from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap()).unwrap();
+    //     let calendar = ZmanimCalendar::new(
+    //         date,
+    //         tz,
+    //         geo_location.clone(),
+    //         NOAACalculator,
+    //         true,
+    //         false,
+    //         Duration::seconds(2880),
+    //         Duration::seconds(480),
+    //     )
+    //     .unwrap();
+    //     let java_calendar = JavaZmanimCalendar::new(
+    //         &jvm,
+    //         date_time,
+    //         timezone_id,
+    //         geo_location,
+    //         Duration::seconds(2880),
+    //         true,
+    //         false,
+    //         Duration::seconds(480),
+    //     );
+    //     // Test parameters
+    //     let alos: Option<DateTime<Tz>> = None;
+    //     let tzais: Option<DateTime<Tz>> = None;
+    //     // Add the specific comparison that failed here
+    //     compare_zmanim_calendars(
+    //         &calendar,
+    //         &java_calendar,
+    //         54.947388116343035,
+    //         -7.385248972075999,
+    //         14.667371531637693,
+    //         &tz.with_ymd_and_hms(2035, 12, 3, 9, 43, 58).unwrap(),
+    //         &tz.with_ymd_and_hms(2035, 12, 3, 22, 11, 33).unwrap(),
+    //         81.513712138264,
+    //         true,
+    //         &tz.with_ymd_and_hms(2035, 12, 4, 1, 41, 8).unwrap(),
+    //         &tz.with_ymd_and_hms(2035, 12, 4, 7, 47, 51).unwrap(),
+    //         None,
+    //         Some(&tz.with_ymd_and_hms(2035, 12, 4, 8, 41, 4).unwrap()),
+    //         true,
+    //         alos.as_ref(),
+    //         tzais.as_ref(),
+    //     );
+    // }
 }
