@@ -4,7 +4,7 @@ use crate::{
     geolocation::GeoLocationTrait,
     prelude::{GeoLocation, JewishCalendar, JewishCalendarTrait},
 };
-use chrono::{DateTime, Datelike, Days, Duration, NaiveDate, Offset, TimeDelta, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, Days, Duration, NaiveDate, Offset, TimeDelta, TimeZone, Utc};
 use core::time::Duration as StdDuration;
 use icu_calendar::{
     options::{DateAddOptions, Overflow},
@@ -92,27 +92,6 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocatio
                 .checked_sub_days(Days::new(offset.unsigned_abs() as u64))
         }
     }
-    fn _get_midnight_last_night(&self) -> Option<DateTime<Tz>> {
-        let midnight = self
-            .get_date_time()
-            .with_hour(0)?
-            .with_minute(0)?
-            .with_second(0)?
-            .with_nanosecond(0)?;
-        Some(midnight)
-    }
-
-    fn _get_midnight_tonight(&self) -> Option<DateTime<Tz>> {
-        let midnight = self
-            .get_date_time()
-            .clone()
-            .with_hour(0)?
-            .with_minute(0)?
-            .with_second(0)?
-            .with_nanosecond(0)?
-            .checked_add_days(Days::new(1))?;
-        Some(midnight)
-    }
 
     fn _get_molad_based_time(
         &self,
@@ -122,9 +101,8 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendar<Tz, GeoLocatio
         techila: bool,
     ) -> Option<DateTime<Tz>> {
         let molad_based_time = self._localized_datetime(utc_molad_based_time);
-        let last_midnight = self._get_midnight_last_night()?;
-        let midnight_tonight = self._get_midnight_tonight()?;
-        if molad_based_time < last_midnight || molad_based_time > midnight_tonight {
+
+        if molad_based_time.date_naive() != self.get_date_time().date_naive() {
             None
         } else {
             match (alos, tzais) {
@@ -749,6 +727,8 @@ impl<Tz: TimeZone, N: AstronomicalCalculatorTrait> ZmanimCalendarTrait<Tz, GeoLo
             return None;
         }
         let timezone_offset_hours = self.date_time.offset().fix().local_minus_utc() as f64 / 60.0 / 60.0;
+        println!("timezone_offset_hours: {:?}", timezone_offset_hours);
+        println!("millis: {:?}", self.date_time.timestamp_millis());
         let start = self.get_date_from_time(hours - timezone_offset_hours, _SolarEvent::Sunrise)?;
         let offset = self.get_geo_location().get_local_mean_time_offset(&self.date_time);
         Some(start - offset)

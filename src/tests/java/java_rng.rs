@@ -1,6 +1,6 @@
 //! A set of functions which generate random pairs of Java and Rust objects.
 //! This is used in our testing framework to create random test cases.
-use chrono::{Datelike, Duration, Utc};
+use chrono::{Datelike, Duration, Timelike, Utc};
 use j4rs::Jvm;
 use rand::Rng;
 
@@ -51,6 +51,12 @@ pub fn create_zmanim_calendars<'a>(
     let (geo_location, _) = create_geolocations(jvm, rng, timezone_id)?;
 
     let date_time = random_date_time(rng, STATIC_OFFSET_TIMEZONES.contains(&tz), tz);
+    // Ensure that we are creating a date time with a valid hour, minute, second, and nanosecond
+    let date_time = date_time
+        .with_hour(0)?
+        .with_minute(0)?
+        .with_second(0)?
+        .with_nanosecond(0)?;
     let candle_lighting_offset = Duration::minutes(rng.gen_range(0..=60));
     let use_astronomical_chatzos = rng.gen_bool(0.5);
     let use_astronomical_chatzos_for_other_zmanim = rng.gen_bool(0.5);
@@ -89,6 +95,12 @@ pub fn create_zmanim_calendars_naive<'a>(
     let (geo_location, _) = create_geolocations(jvm, rng, "UTC")?;
 
     let date_time = random_date_time(rng, true, Utc);
+    // Ensure that we are creating a date time with a valid hour, minute, second, and nanosecond
+    let date_time = date_time
+        .with_hour(0)?
+        .with_minute(0)?
+        .with_second(0)?
+        .with_nanosecond(0)?;
     let candle_lighting_offset = Duration::minutes(rng.gen_range(0..=60));
     let use_astronomical_chatzos = rng.gen_bool(0.5);
     let use_astronomical_chatzos_for_other_zmanim = rng.gen_bool(0.5);
