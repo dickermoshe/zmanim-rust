@@ -15,8 +15,6 @@ use icu_calendar::types::DateDuration;
 use icu_calendar::types::MonthCode;
 use icu_calendar::types::Weekday as IcuWeekday;
 
-use crate::astronomical_calculator::AstronomicalCalculatorTrait;
-use crate::astronomical_calculator::get_julian_day;
 use crate::constants::*;
 use crate::daf::*;
 // use crate:::InternalJewishCalendarTrait;
@@ -110,15 +108,14 @@ pub struct MoladData {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq)]
-pub struct JewishCalendar<N: AstronomicalCalculatorTrait> {
+pub struct JewishCalendar {
     pub(crate) hebrew_date: Date<Hebrew>,
     pub in_israel: bool,
     pub is_mukaf_choma: bool,
     pub use_modern_holidays: bool,
-    pub(crate) calculator: N,
 }
 
-impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
+impl JewishCalendar {
     pub(crate) fn get_gregorian_date(&self) -> Date<Gregorian> {
         self.get_hebrew_date().to_calendar(Gregorian)
     }
@@ -126,21 +123,21 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
         match month {
             JewishMonth::Iyar | JewishMonth::Tammuz | JewishMonth::Elul | JewishMonth::Teves => 29,
             JewishMonth::Cheshvan => {
-                if JewishCalendar::<N>::is_cheshvan_long_static(year) {
+                if JewishCalendar::is_cheshvan_long_static(year) {
                     30
                 } else {
                     29
                 }
             }
             JewishMonth::Kislev => {
-                if JewishCalendar::<N>::is_kislev_short_static(year) {
+                if JewishCalendar::is_kislev_short_static(year) {
                     29
                 } else {
                     30
                 }
             }
             JewishMonth::Adar => {
-                if JewishCalendar::<N>::is_jewish_leap_year_static(year) {
+                if JewishCalendar::is_jewish_leap_year_static(year) {
                     30
                 } else {
                     29
@@ -151,16 +148,15 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
         }
     }
     pub fn get_days_in_jewish_year_static(year: i32) -> i32 {
-        JewishCalendar::<N>::get_jewish_calendar_elapsed_days(year + 1)
-            - JewishCalendar::<N>::get_jewish_calendar_elapsed_days(year)
+        JewishCalendar::get_jewish_calendar_elapsed_days(year + 1)
+            - JewishCalendar::get_jewish_calendar_elapsed_days(year)
     }
     pub fn get_jewish_calendar_elapsed_days(year: i32) -> i32 {
-        let chalakim_since =
-            JewishCalendar::<N>::get_chalakim_since_molad_tohu_static(year, JewishMonth::Tishrei.into());
+        let chalakim_since = JewishCalendar::get_chalakim_since_molad_tohu_static(year, JewishMonth::Tishrei.into());
         let molad_day = chalakim_since / _CHALAKIM_PER_DAY;
         let molad_parts = chalakim_since - molad_day * _CHALAKIM_PER_DAY;
 
-        JewishCalendar::<N>::add_dechiyos(year, molad_day, molad_parts)
+        JewishCalendar::add_dechiyos(year, molad_day, molad_parts)
     }
     pub fn get_last_day_of_gregorian_month(month: u8, year: i32) -> u8 {
         match month {
@@ -187,7 +183,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
         in_israel: bool,
         is_mukaf_choma: bool,
         use_modern_holidays: bool,
-        calculator: N,
     ) -> Option<Self> {
         let is_leap_year = Date::try_new_from_codes(Some("am"), year, MonthCode("M01".parse().ok()?), 1, Hebrew)
             .ok()?
@@ -242,7 +237,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             in_israel,
             is_mukaf_choma,
             use_modern_holidays,
-            calculator,
         })
     }
     pub fn from_gregorian_date(
@@ -252,7 +246,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
         in_israel: bool,
         is_mukaf_choma: bool,
         use_modern_holidays: bool,
-        calculator: N,
     ) -> Option<Self> {
         let gregorian_date = Date::try_new_iso(year, month, day).ok()?;
 
@@ -261,7 +254,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             in_israel,
             is_mukaf_choma,
             use_modern_holidays,
-            calculator,
         })
     }
     pub(crate) fn copy_with_date(&self, date: Date<Hebrew>) -> Self {
@@ -270,7 +262,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             in_israel: self.in_israel,
             is_mukaf_choma: self.is_mukaf_choma,
             use_modern_holidays: self.use_modern_holidays,
-            calculator: self.calculator.clone(),
         }
     }
     pub(crate) fn copy_with_hebrew_ymd(&self, year: i32, month: JewishMonth, day: u8) -> Option<Self> {
@@ -281,7 +272,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             self.in_israel,
             self.is_mukaf_choma,
             self.use_modern_holidays,
-            self.calculator.clone(),
         )
     }
     pub(crate) fn copy_with_gregorian_ymd(&self, year: i32, month: u8, day: u8) -> Option<Self> {
@@ -292,7 +282,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
             self.in_israel,
             self.is_mukaf_choma,
             self.use_modern_holidays,
-            self.calculator.clone(),
         )
     }
 
@@ -327,7 +316,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     }
 
     fn get_chalakim_since_molad_tohu_static(year: i32, month: u8) -> i64 {
-        let month_of_year = JewishCalendar::<N>::get_jewish_month_of_year(year, month);
+        let month_of_year = JewishCalendar::get_jewish_month_of_year(year, month);
         let months_elapsed = (235 * ((year - 1) / 19))
             + (12 * ((year - 1) % 19))
             + ((7 * ((year - 1) % 19) + 1) / 19)
@@ -337,7 +326,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     }
 
     fn get_jewish_month_of_year(year: i32, month: u8) -> u8 {
-        let is_leap_year = JewishCalendar::<N>::is_jewish_leap_year_static(year);
+        let is_leap_year = JewishCalendar::is_jewish_leap_year_static(year);
         (month + if is_leap_year { 6 } else { 5 }) % if is_leap_year { 13 } else { 12 } + 1
     }
 
@@ -345,12 +334,10 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
         let mut rosh_hashana_day = molad_day;
 
         if (molad_parts >= 19440)
-            || (((molad_day % 7) == 2)
-                && (molad_parts >= 9924)
-                && !JewishCalendar::<N>::is_jewish_leap_year_static(year))
+            || (((molad_day % 7) == 2) && (molad_parts >= 9924) && !JewishCalendar::is_jewish_leap_year_static(year))
             || (((molad_day % 7) == 1)
                 && (molad_parts >= 16789)
-                && (JewishCalendar::<N>::is_jewish_leap_year_static(year - 1)))
+                && (JewishCalendar::is_jewish_leap_year_static(year - 1)))
         {
             rosh_hashana_day += 1;
         }
@@ -363,13 +350,12 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     }
 
     fn is_cheshvan_long_static(year: i32) -> bool {
-        JewishCalendar::<N>::get_days_in_jewish_year_static(year) % 10 == 5
+        JewishCalendar::get_days_in_jewish_year_static(year) % 10 == 5
     }
 
     fn is_kislev_short_static(year: i32) -> bool {
-        JewishCalendar::<N>::get_days_in_jewish_year_static(year) % 10 == 3
+        JewishCalendar::get_days_in_jewish_year_static(year) % 10 == 3
     }
-
 
     fn molad_to_abs_date(chalakim: i64) -> i64 {
         _JEWISH_EPOCH + (chalakim / _CHALAKIM_PER_DAY)
@@ -377,7 +363,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     fn gregorian_date_to_abs_date(year: i32, month: u8, day_of_month: u8) -> i64 {
         let mut abs_date = day_of_month as i64;
         for m in (1..month).rev() {
-            abs_date += JewishCalendar::<N>::get_last_day_of_gregorian_month(m, year) as i64;
+            abs_date += JewishCalendar::get_last_day_of_gregorian_month(m, year) as i64;
         }
         let year: i64 = year as i64;
         abs_date + 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
@@ -385,20 +371,20 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
 
     fn abs_date_to_date(abs_date: i64) -> Option<Date<Gregorian>> {
         let mut year = (abs_date / 366) as i32;
-        while abs_date >= JewishCalendar::<N>::gregorian_date_to_abs_date(year + 1, 1, 1) {
+        while abs_date >= JewishCalendar::gregorian_date_to_abs_date(year + 1, 1, 1) {
             year += 1;
         }
         let mut month: u8 = 1;
         while abs_date
-            > JewishCalendar::<N>::gregorian_date_to_abs_date(
+            > JewishCalendar::gregorian_date_to_abs_date(
                 year,
                 month,
-                JewishCalendar::<N>::get_last_day_of_gregorian_month(month, year),
+                JewishCalendar::get_last_day_of_gregorian_month(month, year),
             )
         {
             month += 1;
         }
-        let day_of_month: u8 = (abs_date - JewishCalendar::<N>::gregorian_date_to_abs_date(year, month, 1) + 1) as u8;
+        let day_of_month: u8 = (abs_date - JewishCalendar::gregorian_date_to_abs_date(year, month, 1) + 1) as u8;
         Date::try_new_gregorian(year, month, day_of_month).ok()
     }
 
@@ -436,18 +422,17 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
 
     fn get_parsha_list(&self) -> Option<ParshaList> {
         let rosh_hashana_day_of_week =
-            (JewishCalendar::<N>::get_jewish_calendar_elapsed_days(self.get_jewish_year()) + 1) % 7;
-            let rosh_hashana_day_of_week = match  rosh_hashana_day_of_week {
-                0 => Some(Weekday::Sat),
-                1=>Some(Weekday::Sun),
-                2=>Some(Weekday::Mon),
-                3=>Some(Weekday::Tue),
-                4=>Some(Weekday::Wed),
-                5=>Some(Weekday::Thu),
-                6=>Some(Weekday::Fri),
-                _ => None
-            }?;
-  
+            (JewishCalendar::get_jewish_calendar_elapsed_days(self.get_jewish_year()) + 1) % 7;
+        let rosh_hashana_day_of_week = match rosh_hashana_day_of_week {
+            0 => Some(Weekday::Sat),
+            1 => Some(Weekday::Sun),
+            2 => Some(Weekday::Mon),
+            3 => Some(Weekday::Tue),
+            4 => Some(Weekday::Wed),
+            5 => Some(Weekday::Thu),
+            6 => Some(Weekday::Fri),
+            _ => None,
+        }?;
 
         if self.is_jewish_leap_year() {
             match rosh_hashana_day_of_week {
@@ -514,14 +499,14 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
                         None
                     }
                 }
-                Weekday::Tue=> {
+                Weekday::Tue => {
                     if self.in_israel {
                         Some(PARSHA_LIST_12)
                     } else {
                         Some(PARSHA_LIST_1)
                     }
                 }
-                Weekday::Thu=> {
+                Weekday::Thu => {
                     if self.is_cheshvan_long() {
                         Some(PARSHA_LIST_3)
                     } else if !self.is_kislev_short() {
@@ -534,7 +519,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
                         None
                     }
                 }
-                Weekday::Sat=> {
+                Weekday::Sat => {
                     if self.is_kislev_short() {
                         Some(PARSHA_LIST_4)
                     } else if self.is_cheshvan_long() {
@@ -549,7 +534,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendar<N> {
     }
 }
 
-impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
+impl JewishCalendarTrait for JewishCalendar {
     fn get_jewish_month(&self) -> JewishMonth {
         let month_code = self.get_hebrew_date().month().formatting_code.0;
         match month_code.as_str() {
@@ -601,32 +586,30 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn is_jewish_leap_year(&self) -> bool {
-        JewishCalendar::<N>::is_jewish_leap_year_static(self.get_jewish_year())
+        JewishCalendar::is_jewish_leap_year_static(self.get_jewish_year())
     }
 
     fn get_days_in_jewish_year(&self) -> i32 {
-        JewishCalendar::<N>::get_days_in_jewish_year_static(self.get_jewish_year())
+        JewishCalendar::get_days_in_jewish_year_static(self.get_jewish_year())
     }
 
     fn get_days_in_jewish_month(&self) -> u8 {
-        JewishCalendar::<N>::get_days_in_jewish_month_static(self.get_jewish_month(), self.get_jewish_year())
+        JewishCalendar::get_days_in_jewish_month_static(self.get_jewish_month(), self.get_jewish_year())
     }
 
     fn is_cheshvan_long(&self) -> bool {
-        JewishCalendar::<N>::is_cheshvan_long_static(self.get_jewish_year())
+        JewishCalendar::is_cheshvan_long_static(self.get_jewish_year())
     }
 
     fn is_kislev_short(&self) -> bool {
-        JewishCalendar::<N>::is_kislev_short_static(self.get_jewish_year())
+        JewishCalendar::is_kislev_short_static(self.get_jewish_year())
     }
 
     fn get_cheshvan_kislev_kviah(&self) -> YearLengthType {
         let year = self.get_jewish_year();
-        if JewishCalendar::<N>::is_cheshvan_long_static(year) && !JewishCalendar::<N>::is_kislev_short_static(year) {
+        if JewishCalendar::is_cheshvan_long_static(year) && !JewishCalendar::is_kislev_short_static(year) {
             YearLengthType::Shelaimim
-        } else if !JewishCalendar::<N>::is_cheshvan_long_static(year)
-            && JewishCalendar::<N>::is_kislev_short_static(year)
-        {
+        } else if !JewishCalendar::is_cheshvan_long_static(year) && JewishCalendar::is_kislev_short_static(year) {
             YearLengthType::Chaserim
         } else {
             YearLengthType::Kesidran
@@ -642,7 +625,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
         let mut elapsed_days: i32 = day as i32;
         let mut start = JewishMonth::Tishrei;
         while start != current_month {
-            elapsed_days += JewishCalendar::<N>::get_days_in_jewish_month_static(start, year) as i32;
+            elapsed_days += JewishCalendar::get_days_in_jewish_month_static(start, year) as i32;
             start = start.next(is_leap_year)
         }
 
@@ -652,7 +635,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     fn get_chalakim_since_molad_tohu(&self) -> i64 {
         let year = self.get_jewish_year();
         let month = self.get_jewish_month();
-        JewishCalendar::<N>::get_chalakim_since_molad_tohu_static(year, month.into())
+        JewishCalendar::get_chalakim_since_molad_tohu_static(year, month.into())
     }
 
     fn get_molad(&self) -> Option<MoladData> {
@@ -923,7 +906,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn is_aseres_yemei_teshuva(&self) -> bool {
-        let month = self.get_jewish_month() ;
+        let month = self.get_jewish_month();
         let day = self.get_jewish_day_of_month();
         month == JewishMonth::Tishrei && day <= 10
     }
@@ -997,8 +980,8 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
     fn is_rosh_chodesh(&self) -> bool {
         let day = self.get_jewish_day_of_month();
-        let month = self.get_jewish_month() ;
-        (day == 1 && month != JewishMonth::Tishrei ) || day == 30
+        let month = self.get_jewish_month();
+        (day == 1 && month != JewishMonth::Tishrei) || day == 30
     }
 
     fn is_isru_chag(&self) -> bool {
@@ -1020,10 +1003,11 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
     fn is_taanis_bechoros(&self) -> bool {
         let day = self.get_jewish_day_of_month();
-        let day_of_week = self.get_day_of_week() ;
-        let month = self.get_jewish_month() ;
+        let day_of_week = self.get_day_of_week();
+        let month = self.get_jewish_month();
 
-        month == JewishMonth::Nissan  && ((day == 14 && day_of_week != Weekday::Sat) || (day == 12 && day_of_week == Weekday::Thu))
+        month == JewishMonth::Nissan
+            && ((day == 14 && day_of_week != Weekday::Sat) || (day == 12 && day_of_week == Weekday::Thu))
     }
 
     fn get_day_of_chanukah(&self) -> Option<u8> {
@@ -1059,14 +1043,14 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn get_day_of_omer(&self) -> Option<u8> {
-        let month = self.get_jewish_month() ;
+        let month = self.get_jewish_month();
         let day = self.get_jewish_day_of_month();
 
-        if month == JewishMonth::Nissan  && day >= 16 {
+        if month == JewishMonth::Nissan && day >= 16 {
             Some(day - 15)
         } else if month == JewishMonth::Iyar {
             Some(day + 15)
-        } else if month == JewishMonth::Sivan  && day < 6 {
+        } else if month == JewishMonth::Sivan && day < 6 {
             Some(day + 44)
         } else {
             None
@@ -1084,72 +1068,72 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
         let parsha_list = self.get_parsha_list()?;
 
-        let rosh_hashana_day_of_week =
-            JewishCalendar::<N>::get_jewish_calendar_elapsed_days(self.get_jewish_year()) % 7;
+        let rosh_hashana_day_of_week = JewishCalendar::get_jewish_calendar_elapsed_days(self.get_jewish_year()) % 7;
         let day = rosh_hashana_day_of_week + self.get_days_since_start_of_jewish_year();
         parsha_list[(day / 7) as usize]
     }
 
     fn get_daf_yomi_bavli(&self) -> Option<BavliDaf> {
-        let date = icu_to_naive(&self.get_gregorian_date())?;
-        let milliseconds_since_epoch = date.timestamp_millis();
+        todo!();
+        // let date = icu_to_naive(&self.get_gregorian_date())?;
+        // let milliseconds_since_epoch = date.timestamp_millis();
 
-        let daf_yomi_julian_start = get_julian_day(&_BAVLI_DAF_YOMI_START_DAY) as i64;
-        let shekalim_julian_change = get_julian_day(&_BAVLI_SHEKALIM_CHANGE_DAY) as i64;
+        // let daf_yomi_julian_start = get_julian_day(&_BAVLI_DAF_YOMI_START_DAY) as i64;
+        // let shekalim_julian_change = get_julian_day(&_BAVLI_SHEKALIM_CHANGE_DAY) as i64;
 
-        if milliseconds_since_epoch < _BAVLI_DAF_YOMI_START_DAY.timestamp_millis() {
-            return None;
-        }
+        // if milliseconds_since_epoch < _BAVLI_DAF_YOMI_START_DAY.timestamp_millis() {
+        //     return None;
+        // }
 
-        let julian_day = get_julian_day(&date) as i64;
-        let (cycle_no, daf_no) = if milliseconds_since_epoch >= _BAVLI_SHEKALIM_CHANGE_DAY.timestamp_millis() {
-            let cycle_no = 8 + ((julian_day - shekalim_julian_change) / 2711);
-            let daf_no = (julian_day - shekalim_julian_change) % 2711;
-            (cycle_no, daf_no)
-        } else {
-            let cycle_no = 1 + ((julian_day - daf_yomi_julian_start) / 2702);
-            let daf_no = (julian_day - daf_yomi_julian_start) % 2702;
-            (cycle_no, daf_no)
-        };
-        let mut blatt_per_bavli_tractate: [i64; 40] = [
-            64, 157, 105, 121, 22, 88, 56, 40, 35, 31, 32, 29, 27, 122, 112, 91, 66, 49, 90, 82, 119, 119, 176, 113,
-            24, 49, 76, 14, 120, 110, 142, 61, 34, 34, 28, 22, 4, 9, 5, 73,
-        ];
+        // let julian_day = get_julian_day(&date) as i64;
+        // let (cycle_no, daf_no) = if milliseconds_since_epoch >= _BAVLI_SHEKALIM_CHANGE_DAY.timestamp_millis() {
+        //     let cycle_no = 8 + ((julian_day - shekalim_julian_change) / 2711);
+        //     let daf_no = (julian_day - shekalim_julian_change) % 2711;
+        //     (cycle_no, daf_no)
+        // } else {
+        //     let cycle_no = 1 + ((julian_day - daf_yomi_julian_start) / 2702);
+        //     let daf_no = (julian_day - daf_yomi_julian_start) % 2702;
+        //     (cycle_no, daf_no)
+        // };
+        // let mut blatt_per_bavli_tractate: [i64; 40] = [
+        //     64, 157, 105, 121, 22, 88, 56, 40, 35, 31, 32, 29, 27, 122, 112, 91, 66, 49, 90, 82, 119, 119, 176, 113,
+        //     24, 49, 76, 14, 120, 110, 142, 61, 34, 34, 28, 22, 4, 9, 5, 73,
+        // ];
 
-        if cycle_no <= 7 {
-            blatt_per_bavli_tractate[4] = 13;
-        }
+        // if cycle_no <= 7 {
+        //     blatt_per_bavli_tractate[4] = 13;
+        // }
 
-        let mut total = 0;
-        let mut masechta = -1;
-        let mut blatt = 0;
+        // let mut total = 0;
+        // let mut masechta = -1;
+        // let mut blatt = 0;
 
-        for (i, &blatt_count) in blatt_per_bavli_tractate.iter().enumerate() {
-            masechta = i as i8;
-            total = total + blatt_count - 1;
-            if daf_no < total {
-                blatt = 1 + blatt_count - (total - daf_no);
+        // for (i, &blatt_count) in blatt_per_bavli_tractate.iter().enumerate() {
+        //     masechta = i as i8;
+        //     total = total + blatt_count - 1;
+        //     if daf_no < total {
+        //         blatt = 1 + blatt_count - (total - daf_no);
 
-                if masechta == 36 {
-                    blatt += 21;
-                } else if masechta == 37 {
-                    blatt += 24;
-                } else if masechta == 38 {
-                    blatt += 32;
-                }
-                break;
-            }
-        }
-        if masechta < 0 {
-            None
-        } else {
-            let tractate: BavliTractate = (masechta as u8).try_into().ok()?;
+        //         if masechta == 36 {
+        //             blatt += 21;
+        //         } else if masechta == 37 {
+        //             blatt += 24;
+        //         } else if masechta == 38 {
+        //             blatt += 32;
+        //         }
+        //         break;
+        //     }
+        // }
+        // if masechta < 0 {
+        //     None
+        // } else {
+        //     let tractate: BavliTractate = (masechta as u8).try_into().ok()?;
 
-            Some(BavliDaf {
-                tractate,
-                daf_index: blatt,
-            })
-        }
+        //     Some(BavliDaf {
+        //         tractate,
+        //         daf_index: blatt,
+        //     })
+        // }
     }
 
     fn get_daf_yomi_yerushalmi(&self) -> Option<YerushalmiDaf> {
@@ -1208,7 +1192,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     }
 
     fn is_birkas_hachamah(&self) -> bool {
-        let elapsed_days = JewishCalendar::<N>::get_jewish_calendar_elapsed_days(self.get_jewish_year());
+        let elapsed_days = JewishCalendar::get_jewish_calendar_elapsed_days(self.get_jewish_year());
         let elapsed_days = elapsed_days + self.get_days_since_start_of_jewish_year();
         let cycle_length = 10227i32;
         (elapsed_days % cycle_length) == 172
@@ -1283,7 +1267,6 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
             Weekday::Sat => 7,
             Weekday::Sun => 6,
         };
-   
 
         // Create a new calendar for the upcoming Shabbos
         let mut upcoming_year = self.get_jewish_year();
@@ -1291,7 +1274,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
         let mut upcoming_day = self.get_jewish_day_of_month() + days_to_shabbos;
 
         // Handle month/year overflow
-        let days_in_month = JewishCalendar::<N>::get_days_in_jewish_month_static(upcoming_month, upcoming_year);
+        let days_in_month = JewishCalendar::get_days_in_jewish_month_static(upcoming_month, upcoming_year);
         while upcoming_day > days_in_month {
             upcoming_day -= days_in_month;
             upcoming_month = match upcoming_month {
@@ -1299,16 +1282,14 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
                     upcoming_year += 1;
                     JewishMonth::Tishrei
                 }
-                JewishMonth::Adar if !JewishCalendar::<N>::is_jewish_leap_year_static(upcoming_year) => {
-                    JewishMonth::Nissan
-                }
+                JewishMonth::Adar if !JewishCalendar::is_jewish_leap_year_static(upcoming_year) => JewishMonth::Nissan,
                 JewishMonth::AdarII => JewishMonth::Nissan,
                 _ => {
                     let month_num: u8 = upcoming_month.into();
                     (month_num + 1).try_into().ok()?
                 }
             };
-            let days_in_month = JewishCalendar::<N>::get_days_in_jewish_month_static(upcoming_month, upcoming_year);
+            let days_in_month = JewishCalendar::get_days_in_jewish_month_static(upcoming_month, upcoming_year);
             if upcoming_day > days_in_month {
                 continue;
             }
@@ -1326,7 +1307,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
 
         while parshah.is_none() {
             temp_day += 7;
-            let days_in_month = JewishCalendar::<N>::get_days_in_jewish_month_static(temp_month, temp_year);
+            let days_in_month = JewishCalendar::get_days_in_jewish_month_static(temp_month, temp_year);
             if temp_day > days_in_month {
                 temp_day -= days_in_month;
                 temp_month = match temp_month {
@@ -1334,9 +1315,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
                         temp_year += 1;
                         JewishMonth::Tishrei
                     }
-                    JewishMonth::Adar if !JewishCalendar::<N>::is_jewish_leap_year_static(temp_year) => {
-                        JewishMonth::Nissan
-                    }
+                    JewishMonth::Adar if !JewishCalendar::is_jewish_leap_year_static(temp_year) => JewishMonth::Nissan,
                     JewishMonth::AdarII => JewishMonth::Nissan,
                     _ => {
                         let month_num: u8 = temp_month.into();
@@ -1487,7 +1466,7 @@ impl<N: AstronomicalCalculatorTrait> JewishCalendarTrait for JewishCalendar<N> {
     // Tekufos and Seasonal Prayers
     fn get_tekufas_tishrei_elapsed_days(&self) -> i64 {
         // Days since Rosh Hashana year 1, plus 1/2 day (0.5)
-        let days = JewishCalendar::<N>::get_jewish_calendar_elapsed_days(self.get_jewish_year()) as f64
+        let days = JewishCalendar::get_jewish_calendar_elapsed_days(self.get_jewish_year()) as f64
             + (self.get_days_since_start_of_jewish_year() - 1) as f64
             + 0.5;
 
@@ -1604,7 +1583,7 @@ fn icu_to_naive(date: &Date<Gregorian>) -> Option<DateTime<Utc>> {
 }
 
 #[cfg(feature = "defmt")]
-impl<N: AstronomicalCalculatorTrait> defmt::Format for JewishCalendar<N> {
+impl defmt::Format for JewishCalendar {
     fn format(&self, f: defmt::Formatter) {
         use icu_calendar::types::{CyclicYear, YearInfo};
 
@@ -1614,7 +1593,7 @@ impl<N: AstronomicalCalculatorTrait> defmt::Format for JewishCalendar<N> {
             YearInfo::Era(era_year) => {
                 defmt::write!(
                     f,
-                    "JewishCalendar(year={}, month={}, day={}, era={}, in_israel={}, is_mukaf_choma={}, use_modern_holidays={}, calculator={:?})",
+                    "JewishCalendar(year={}, month={}, day={}, era={}, in_israel={}, is_mukaf_choma={}, use_modern_holidays={})",
                     era_year.year,
                     month,
                     day,
@@ -1622,13 +1601,12 @@ impl<N: AstronomicalCalculatorTrait> defmt::Format for JewishCalendar<N> {
                     self.in_israel,
                     self.is_mukaf_choma,
                     self.use_modern_holidays,
-                    self.calculator
                 )
             }
             YearInfo::Cyclic(CyclicYear { year, related_iso, .. }) => {
                 defmt::write!(
                     f,
-                    "JewishCalendar(year={}, month={}, day={}, ISO year={}, in_israel={}, is_mukaf_choma={}, use_modern_holidays={}, calculator={:?})",
+                    "JewishCalendar(year={}, month={}, day={}, ISO year={}, in_israel={}, is_mukaf_choma={}, use_modern_holidays={})",
                     year,
                     month,
                     day,
@@ -1636,19 +1614,17 @@ impl<N: AstronomicalCalculatorTrait> defmt::Format for JewishCalendar<N> {
                     self.in_israel,
                     self.is_mukaf_choma,
                     self.use_modern_holidays,
-                    self.calculator
                 )
             }
             _ => {
                 defmt::write!(
                     f,
-                    "JewishCalendar(year=???, month={}, day={}, in_israel={}, is_mukaf_choma={}, use_modern_holidays={}, calculator={:?})",
+                    "JewishCalendar(year=???, month={}, day={}, in_israel={}, is_mukaf_choma={}, use_modern_holidays={})",
                     month,
                     day,
                     self.in_israel,
                     self.is_mukaf_choma,
                     self.use_modern_holidays,
-                    self.calculator
                 )
             }
         }

@@ -4,375 +4,251 @@ use std::fmt::{Debug, Error, Formatter};
 
 use crate::constants::{JewishHoliday, JewishMonth, Parsha, Zman};
 use crate::daf::{BavliDaf, YerushalmiDaf};
-use crate::geolocation::GeoLocation;
 use crate::jewish_calendar::JewishCalendarTrait;
-use crate::prelude::{AstronomicalCalculatorTraitDefmt, MoladData};
+use crate::prelude::MoladData;
 use crate::tefila_rules::TefilaRulesTrait;
-use crate::tests::java::{dt_to_java_calendar, dt_to_java_date, geolocation_to_java_geolocation, tz_to_java_timezone};
-use crate::{astronomical_calculator::AstronomicalCalculatorTrait, geolocation::GeoLocationTrait};
-use chrono::{DateTime, TimeZone, Weekday};
+use crate::time_and_place::TimeAndPlace;
+use chrono::{DateTime, NaiveDate, TimeZone, Weekday};
 use chrono::{Duration, Utc};
 use j4rs::{Instance, InvocationArg, Jvm, Null};
 
-use crate::{astronomical_calculator::NOAACalculator, constants::_SolarEvent, zmanim_calendar::ZmanimCalendarTrait};
-pub struct JavaGeoLocation<'a> {
-    pub jvm: &'a Jvm,
-    pub instance: Instance,
-    pub timezone_id: &'a str,
+use crate::{constants::_SolarEvent, zmanim_calendar::ZmanimCalendarTrait};
+
+pub struct JavaTimeAndPlace {
+    pub geolocation: Instance,
+    pub calendar: Instance,
+    pub time_and_place: TimeAndPlace<chrono_tz::Tz>,
 }
-
-impl<'a> JavaGeoLocation<'a> {
-    pub fn new(jvm: &'a Jvm, latitude: f64, longitude: f64, elevation: f64, timezone_id: &'a str) -> Option<Self> {
-        let java_timezone = tz_to_java_timezone(jvm, timezone_id);
-
-        let instance = jvm
-            .create_instance(
-                "com.kosherjava.zmanim.util.GeoLocation",
-                &[
-                    InvocationArg::try_from("Name").unwrap(),
-                    InvocationArg::try_from(latitude).unwrap().into_primitive().unwrap(),
-                    InvocationArg::try_from(longitude).unwrap().into_primitive().unwrap(),
-                    InvocationArg::try_from(elevation).unwrap().into_primitive().unwrap(),
-                    InvocationArg::from(java_timezone),
-                ],
-            )
-            .ok();
-        // DIFF: Java will throw an exception if it is unable to create a GeoLocation
-        // However we will return None if this is the case
-        instance.as_ref()?;
-        let instance = instance.unwrap();
-        Some(Self {
+impl JavaTimeAndPlace {
+    pub fn new(jvm: &Jvm, time_and_place: &TimeAndPlace<chrono_tz::Tz>) -> Option<Self> {
+        let geolocation = geolocation_to_java_geolocation(jvm, time_and_place)?;
+        let calendar = dt_to_java_calendar(
             jvm,
-            instance,
-            timezone_id,
+            &time_and_place.date_time,
+            time_and_place.date_time.timezone().name(),
+        )?;
+        Some(Self {
+            geolocation,
+            calendar,
+            time_and_place: time_and_place.clone(),
         })
     }
 }
 
-impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
-    fn get_latitude(&self) -> f64 {
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(&self.instance, "getLatitude", InvocationArg::empty())
-                    .unwrap(),
-            )
+/// Converts a Rust DateTime to a Java Date instance.
+pub fn dt_to_java_date(jvm: &Jvm, date: &DateTime<chrono_tz::Tz>) -> Instance {
+    jvm.create_instance(
+        "java.util.Date",
+        &[InvocationArg::try_from(date.timestamp_millis())
             .unwrap()
-    }
-
-    fn get_longitude(&self) -> f64 {
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(&self.instance, "getLongitude", InvocationArg::empty())
-                    .unwrap(),
-            )
+            .into_primitive()
+            .unwrap()],
+    )
+    .unwrap()
+}
+/// Converts a Rust timezone to a Java TimeZone instance.
+///
+/// Returns None if Java cannot find a matching timezone (falls back to GMT).
+pub fn tz_to_java_timezone(jvm: &Jvm, timezone_id: &str) -> Instance {
+    jvm.invoke_static(
+        "com.ibm.icu.util.TimeZone",
+        "getTimeZone",
+        &[InvocationArg::try_from(timezone_id).unwrap()],
+    )
+    .unwrap()
+}
+/// Converts a Rust DateTime to a Java Calendar instance.
+///
+/// Returns None if the timezone cannot be converted to Java.
+pub fn dt_to_java_calendar<Tz: TimeZone>(jvm: &Jvm, date: &DateTime<Tz>, timezone_id: &str) -> Option<Instance> {
+    let java_timezone = tz_to_java_timezone(jvm, timezone_id);
+    let java_calendar = jvm
+        .invoke_static("com.ibm.icu.util.Calendar", "getInstance", InvocationArg::empty())
+        .unwrap();
+    jvm.invoke(&java_calendar, "setTimeZone", &[InvocationArg::from(java_timezone)])
+        .unwrap();
+    jvm.invoke(
+        &java_calendar,
+        "setTimeInMillis",
+        &[InvocationArg::try_from(date.timestamp_millis())
             .unwrap()
-    }
+            .into_primitive()
+            .unwrap()],
+    )
+    .unwrap();
 
-    fn get_elevation(&self) -> f64 {
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(&self.instance, "getElevation", InvocationArg::empty())
-                    .unwrap(),
-            )
-            .unwrap()
-    }
-
-    fn get_rhumb_line_distance(&self, location: &JavaGeoLocation<'_>) -> f64 {
-        let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(
-                        &self.instance,
-                        "getRhumbLineDistance",
-                        &[InvocationArg::from(cloned_instance)],
-                    )
-                    .unwrap(),
-            )
-            .unwrap()
-    }
-
-    fn get_rhumb_line_bearing(&self, location: &JavaGeoLocation<'_>) -> f64 {
-        let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
-        self.jvm
-            .to_rust::<f64>(
-                self.jvm
-                    .invoke(
-                        &self.instance,
-                        "getRhumbLineBearing",
-                        &[InvocationArg::from(cloned_instance)],
-                    )
-                    .unwrap(),
-            )
-            .unwrap()
-    }
-
-    fn get_geodesic_initial_bearing(&self, location: &JavaGeoLocation<'_>) -> Option<f64> {
-        let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getGeodesicInitialBearing",
-                &[InvocationArg::from(cloned_instance)],
-            )
-            .unwrap();
-
-        let result = self.jvm.to_rust::<f64>(result).ok();
-        result.filter(|&value| !value.is_nan())
-    }
-
-    fn get_geodesic_final_bearing(&self, location: &JavaGeoLocation<'_>) -> Option<f64> {
-        let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getGeodesicFinalBearing",
-                &[InvocationArg::from(cloned_instance)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<f64>(result).ok().filter(|&value| !value.is_nan())
-    }
-
-    fn get_geodesic_distance(&self, location: &JavaGeoLocation<'_>) -> Option<f64> {
-        let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getGeodesicDistance",
-                &[InvocationArg::from(cloned_instance)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<f64>(result).ok().filter(|&value| !value.is_nan())
-    }
-
-    fn get_local_mean_time_offset<Tz: chrono::TimeZone>(&self, date: &chrono::DateTime<Tz>) -> chrono::Duration {
-        let java_date = dt_to_java_calendar(self.jvm, date, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .to_rust::<i64>(
-                self.jvm
-                    .invoke(
-                        &self.instance,
-                        "getLocalMeanTimeOffset",
-                        &[InvocationArg::from(java_date)],
-                    )
-                    .unwrap(),
-            )
-            .unwrap();
-        Duration::milliseconds(result)
-    }
-
-    fn get_antimeridian_adjustment<Tz: chrono::TimeZone>(&self, date: &chrono::DateTime<Tz>) -> i8 {
-        let java_date = dt_to_java_calendar(self.jvm, date, self.timezone_id).unwrap();
-        self.jvm
-            .to_rust::<i32>(
-                self.jvm
-                    .invoke(
-                        &self.instance,
-                        "getAntimeridianAdjustment",
-                        &[InvocationArg::from(java_date)],
-                    )
-                    .unwrap(),
-            )
-            .unwrap() as i8
-    }
+    Some(java_calendar)
 }
 
-pub struct JavaAstronomicalCalculator<'a> {
+// impl<'a> JavaGeoLocation<'a> {
+//     pub fn new(jvm: &'a Jvm, latitude: f64, longitude: f64, elevation: f64, timezone_id: &'a str) -> Option<Self> {
+//         let java_timezone = tz_to_java_timezone(jvm, timezone_id);
+
+//         let instance = jvm
+//             .create_instance(
+//                 "com.kosherjava.zmanim.util.GeoLocation",
+//                 &[
+//                     InvocationArg::try_from("Name").unwrap(),
+//                     InvocationArg::try_from(latitude).unwrap().into_primitive().unwrap(),
+//                     InvocationArg::try_from(longitude).unwrap().into_primitive().unwrap(),
+//                     InvocationArg::try_from(elevation).unwrap().into_primitive().unwrap(),
+//                     InvocationArg::from(java_timezone),
+//                 ],
+//             )
+//             .ok();
+//         // DIFF: Java will throw an exception if it is unable to create a GeoLocation
+//         // However we will return None if this is the case
+//         instance.as_ref()?;
+//         let instance = instance.unwrap();
+//         Some(Self {
+//             jvm,
+//             instance,
+//             timezone_id,
+//         })
+//     }
+// }
+
+// impl<'a> GeoLocationTrait for JavaGeoLocation<'a> {
+//     fn get_latitude(&self) -> f64 {
+//         self.jvm
+//             .to_rust::<f64>(
+//                 self.jvm
+//                     .invoke(&self.instance, "getLatitude", InvocationArg::empty())
+//                     .unwrap(),
+//             )
+//             .unwrap()
+//     }
+
+//     fn get_longitude(&self) -> f64 {
+//         self.jvm
+//             .to_rust::<f64>(
+//                 self.jvm
+//                     .invoke(&self.instance, "getLongitude", InvocationArg::empty())
+//                     .unwrap(),
+//             )
+//             .unwrap()
+//     }
+
+//     fn get_elevation(&self) -> f64 {
+//         self.jvm
+//             .to_rust::<f64>(
+//                 self.jvm
+//                     .invoke(&self.instance, "getElevation", InvocationArg::empty())
+//                     .unwrap(),
+//             )
+//             .unwrap()
+//     }
+
+//     fn get_rhumb_line_distance(&self, location: &JavaGeoLocation<'_>) -> f64 {
+//         let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
+//         self.jvm
+//             .to_rust::<f64>(
+//                 self.jvm
+//                     .invoke(
+//                         &self.instance,
+//                         "getRhumbLineDistance",
+//                         &[InvocationArg::from(cloned_instance)],
+//                     )
+//                     .unwrap(),
+//             )
+//             .unwrap()
+//     }
+
+//     fn get_rhumb_line_bearing(&self, location: &JavaGeoLocation<'_>) -> f64 {
+//         let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
+//         self.jvm
+//             .to_rust::<f64>(
+//                 self.jvm
+//                     .invoke(
+//                         &self.instance,
+//                         "getRhumbLineBearing",
+//                         &[InvocationArg::from(cloned_instance)],
+//                     )
+//                     .unwrap(),
+//             )
+//             .unwrap()
+//     }
+
+//     fn get_geodesic_initial_bearing(&self, location: &JavaGeoLocation<'_>) -> Option<f64> {
+//         let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
+//         let result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "getGeodesicInitialBearing",
+//                 &[InvocationArg::from(cloned_instance)],
+//             )
+//             .unwrap();
+
+//         let result = self.jvm.to_rust::<f64>(result).ok();
+//         result.filter(|&value| !value.is_nan())
+//     }
+
+//     fn get_geodesic_final_bearing(&self, location: &JavaGeoLocation<'_>) -> Option<f64> {
+//         let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
+//         let result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "getGeodesicFinalBearing",
+//                 &[InvocationArg::from(cloned_instance)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<f64>(result).ok().filter(|&value| !value.is_nan())
+//     }
+
+//     fn get_geodesic_distance(&self, location: &JavaGeoLocation<'_>) -> Option<f64> {
+//         let cloned_instance = self.jvm.clone_instance(&location.instance).unwrap();
+//         let result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "getGeodesicDistance",
+//                 &[InvocationArg::from(cloned_instance)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<f64>(result).ok().filter(|&value| !value.is_nan())
+//     }
+
+//     fn get_local_mean_time_offset<Tz: chrono::TimeZone>(&self, date: &chrono::DateTime<chrono_tz::Tz>) -> chrono::Duration {
+//         let java_date = dt_to_java_calendar(self.jvm, date, self.timezone_id).unwrap();
+//         let result = self
+//             .jvm
+//             .to_rust::<i64>(
+//                 self.jvm
+//                     .invoke(
+//                         &self.instance,
+//                         "getLocalMeanTimeOffset",
+//                         &[InvocationArg::from(java_date)],
+//                     )
+//                     .unwrap(),
+//             )
+//             .unwrap();
+//         Duration::milliseconds(result)
+//     }
+
+//     fn get_antimeridian_adjustment<Tz: chrono::TimeZone>(&self, date: &chrono::DateTime<chrono_tz::Tz>) -> i8 {
+//         let java_date = dt_to_java_calendar(self.jvm, date, self.timezone_id).unwrap();
+//         self.jvm
+//             .to_rust::<i32>(
+//                 self.jvm
+//                     .invoke(
+//                         &self.instance,
+//                         "getAntimeridianAdjustment",
+//                         &[InvocationArg::from(java_date)],
+//                     )
+//                     .unwrap(),
+//             )
+//             .unwrap() as i8
+//     }
+// }
+
+pub struct JavaZmanimCalendar<'a> {
     pub jvm: &'a Jvm,
     pub instance: Instance,
-    pub timezone_id: &'a str,
+    pub time_and_place: TimeAndPlace<chrono_tz::Tz>,
 }
-impl<'a> Debug for JavaAstronomicalCalculator<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "JavaAstronomicalCalculator")
-    }
-}
-impl<'a> JavaAstronomicalCalculator<'a> {
-    pub fn new(jvm: &'a Jvm, timezone_id: &'a str) -> Self {
-        let instance = jvm
-            .create_instance("com.kosherjava.zmanim.util.NOAACalculator", InvocationArg::empty())
-            .unwrap();
-        Self {
-            jvm,
-            instance,
-            timezone_id,
-        }
-    }
-}
-#[cfg(feature = "defmt")]
-impl<'a> defmt::Format for JavaAstronomicalCalculator<'a> {
-    fn format(&self, f: defmt::Formatter) {
-        defmt::write!(f, "JavaAstronomicalCalculator",);
-    }
-}
-
-impl<'a> AstronomicalCalculatorTraitDefmt for JavaAstronomicalCalculator<'a> {}
-
-impl<'a> AstronomicalCalculatorTrait for JavaAstronomicalCalculator<'a> {
-    fn get_utc_noon<Tz: chrono::TimeZone, G: GeoLocationTrait>(
-        &self,
-        date_time: &chrono::DateTime<Tz>,
-        geo_location: &G,
-    ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCNoon",
-                &[
-                    InvocationArg::from(java_date_time),
-                    InvocationArg::from(java_geo_location),
-                ],
-            )
-            .unwrap();
-        self.jvm.to_rust::<f64>(result).unwrap()
-    }
-
-    fn get_utc_midnight<Tz: chrono::TimeZone, G: GeoLocationTrait>(
-        &self,
-        date_time: &chrono::DateTime<Tz>,
-        geo_location: &G,
-    ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCMidnight",
-                &[
-                    InvocationArg::from(java_date_time),
-                    InvocationArg::from(java_geo_location),
-                ],
-            )
-            .unwrap();
-        self.jvm.to_rust::<f64>(result).unwrap()
-    }
-
-    fn get_utc_sunrise<Tz: chrono::TimeZone, G: GeoLocationTrait>(
-        &self,
-        date_time: &chrono::DateTime<Tz>,
-        geo_location: &G,
-        zenith: f64,
-        adjust_for_elevation: bool,
-    ) -> Option<f64> {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCSunrise",
-                &[
-                    InvocationArg::from(java_date_time),
-                    InvocationArg::from(java_geo_location),
-                    InvocationArg::try_from(zenith).unwrap().into_primitive().unwrap(),
-                    InvocationArg::try_from(adjust_for_elevation)
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap(),
-                ],
-            )
-            .unwrap();
-        let java_result = self.jvm.to_rust::<f64>(result).unwrap();
-        // Convert java's NaN to None
-        if java_result.is_nan() { None } else { Some(java_result) }
-    }
-
-    fn get_utc_sunset<Tz: chrono::TimeZone, G: GeoLocationTrait>(
-        &self,
-        date_time: &chrono::DateTime<Tz>,
-        geo_location: &G,
-        zenith: f64,
-        adjust_for_elevation: bool,
-    ) -> Option<f64> {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCSunset",
-                &[
-                    InvocationArg::from(java_date_time),
-                    InvocationArg::from(java_geo_location),
-                    InvocationArg::try_from(zenith).unwrap().into_primitive().unwrap(),
-                    InvocationArg::try_from(adjust_for_elevation)
-                        .unwrap()
-                        .into_primitive()
-                        .unwrap(),
-                ],
-            )
-            .unwrap();
-        let java_result = self.jvm.to_rust::<f64>(result).unwrap();
-        // Convert java's NaN to None
-        if java_result.is_nan() { None } else { Some(java_result) }
-    }
-
-    fn get_solar_elevation<Tz: chrono::TimeZone, G: GeoLocationTrait>(
-        &self,
-        date_time: &chrono::DateTime<Tz>,
-        geo_location: &G,
-    ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getSolarElevation",
-                &[
-                    InvocationArg::from(java_date_time),
-                    InvocationArg::from(java_geo_location),
-                ],
-            )
-            .unwrap();
-        self.jvm.to_rust::<f64>(result).unwrap()
-    }
-
-    fn get_solar_azimuth<Tz: chrono::TimeZone, G: GeoLocationTrait>(
-        &self,
-        date_time: &chrono::DateTime<Tz>,
-        geo_location: &G,
-    ) -> f64 {
-        let java_date_time = dt_to_java_calendar(self.jvm, date_time, self.timezone_id).unwrap();
-        let java_geo_location = geolocation_to_java_geolocation(self.jvm, geo_location, self.timezone_id).unwrap();
-        let result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getSolarAzimuth",
-                &[
-                    InvocationArg::from(java_date_time),
-                    InvocationArg::from(java_geo_location),
-                ],
-            )
-            .unwrap();
-        self.jvm.to_rust::<f64>(result).unwrap()
-    }
-}
-
-impl<'a> Clone for JavaAstronomicalCalculator<'a> {
-    fn clone(&self) -> Self {
-        unreachable!();
-    }
-}
-
-pub struct JavaZmanimCalendar<'a, Tz: TimeZone> {
-    pub jvm: &'a Jvm,
-    pub instance: Instance,
-    pub date_time: DateTime<Tz>,
-}
-impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
+impl<'a> JavaZmanimCalendar<'a> {
     fn get_java_date_millis(&self, date_instance: &Instance) -> Option<i64> {
         //check for null
         let is_null = self
@@ -393,42 +269,44 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
         Some(millis)
     }
 
-    fn java_date_to_rust_datetime(&self, date_instance: &Instance) -> Option<DateTime<Tz>> {
+    fn java_date_to_rust_datetime(&self, date_instance: &Instance) -> Option<DateTime<chrono_tz::Tz>> {
         let millis = self.get_java_date_millis(date_instance)?;
-        Some(self.date_time.timezone().timestamp_millis_opt(millis).unwrap())
+        Some(
+            self.time_and_place
+                .date_time
+                .timezone()
+                .timestamp_millis_opt(millis)
+                .unwrap(),
+        )
     }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         jvm: &'a Jvm,
-        date_time: DateTime<Tz>,
-        timezone_id: &str,
-        geo_location: GeoLocation,
+        java_time_and_place: JavaTimeAndPlace,
         candle_lighting_offset: Duration,
         use_astronomical_chatzos: bool,
         use_astronomical_chatzos_for_other_zmanim: bool,
         ateret_torah_sunset_offset: Duration,
-    ) -> Self {
-        let java_geolocation = geolocation_to_java_geolocation(jvm, &geo_location, timezone_id).unwrap();
-        let java_date_time = dt_to_java_calendar(jvm, &date_time, timezone_id).unwrap();
+    ) -> Option<Self> {
         let java_zmanim_calendar = jvm
             .create_instance(
                 "com.kosherjava.zmanim.ComplexZmanimCalendar",
-                &[InvocationArg::from(java_geolocation)],
+                &[InvocationArg::from(java_time_and_place.geolocation)],
             )
-            .unwrap();
+            .ok()?;
         jvm.invoke(
             &java_zmanim_calendar,
             "setCalendar",
-            &[InvocationArg::from(java_date_time)],
+            &[InvocationArg::from(java_time_and_place.calendar)],
         )
-        .unwrap();
+        .ok()?;
 
         jvm.invoke(
             &java_zmanim_calendar,
             "setUseElevation",
             &[InvocationArg::try_from(true).unwrap().into_primitive().unwrap()],
         )
-        .unwrap();
+        .ok()?;
         jvm.invoke(
             &java_zmanim_calendar,
             "setUseAstronomicalChatzos",
@@ -437,7 +315,7 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
                 .into_primitive()
                 .unwrap()],
         )
-        .unwrap();
+        .ok()?;
         jvm.invoke(
             &java_zmanim_calendar,
             "setUseAstronomicalChatzosForOtherZmanim",
@@ -446,7 +324,7 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
                 .into_primitive()
                 .unwrap()],
         )
-        .unwrap();
+        .ok()?;
         jvm.invoke(
             &java_zmanim_calendar,
             "setAteretTorahSunsetOffset",
@@ -457,7 +335,7 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
                     .unwrap(),
             ],
         )
-        .unwrap();
+        .ok()?;
 
         jvm.invoke(
             &java_zmanim_calendar,
@@ -467,13 +345,13 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
                 .into_primitive()
                 .unwrap()],
         )
-        .unwrap();
+        .ok()?;
 
-        Self {
+        Some(Self {
             jvm,
             instance: java_zmanim_calendar,
-            date_time,
-        }
+            time_and_place: java_time_and_place.time_and_place.clone(),
+        })
     }
 
     fn get_java_duration_millis(&self, duration_instance: Instance) -> Option<i64> {
@@ -487,25 +365,13 @@ impl<'a, Tz: TimeZone> JavaZmanimCalendar<'a, Tz> {
     }
 }
 
-impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for JavaZmanimCalendar<'a, Tz> {
+impl<'a> ZmanimCalendarTrait<chrono_tz::Tz> for JavaZmanimCalendar<'a> {
     // These methods are not used in the tests, but we need to implement them for the trait.
-    fn get_date_time(&self) -> &DateTime<Tz> {
-        todo!()
-    }
-    // These methods are not used in the tests, but we need to implement them for the trait.
-    fn get_geo_location(&self) -> &GeoLocation {
-        todo!()
-    }
-    // These methods are not used in the tests, but we need to implement them for the trait.
-    fn get_calculator(&self) -> &NOAACalculator {
-        todo!()
-    }
-    // These methods are not used in the tests, but we need to implement them for the trait.
-    fn get_date_from_time(&self, _calculated_time: f64, _solar_event: _SolarEvent) -> Option<DateTime<Tz>> {
+    fn get_date_time(&self) -> &DateTime<chrono_tz::Tz> {
         todo!()
     }
 
-    fn get_sunrise(&self) -> Option<DateTime<Tz>> {
+    fn get_sunrise(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getSunrise", InvocationArg::empty())
@@ -513,7 +379,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_sea_level_sunrise(&self) -> Option<DateTime<Tz>> {
+    fn get_sea_level_sunrise(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getSeaLevelSunrise", InvocationArg::empty())
@@ -522,7 +388,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_begin_civil_twilight(&self) -> Option<DateTime<Tz>> {
+    fn get_begin_civil_twilight(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getBeginCivilTwilight", InvocationArg::empty())
@@ -530,7 +396,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_begin_nautical_twilight(&self) -> Option<DateTime<Tz>> {
+    fn get_begin_nautical_twilight(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getBeginNauticalTwilight", InvocationArg::empty())
@@ -538,7 +404,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_begin_astronomical_twilight(&self) -> Option<DateTime<Tz>> {
+    fn get_begin_astronomical_twilight(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getBeginAstronomicalTwilight", InvocationArg::empty())
@@ -546,7 +412,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_sunset(&self) -> Option<DateTime<Tz>> {
+    fn get_sunset(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getSunset", InvocationArg::empty())
@@ -555,7 +421,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_sea_level_sunset(&self) -> Option<DateTime<Tz>> {
+    fn get_sea_level_sunset(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getSeaLevelSunset", InvocationArg::empty())
@@ -563,7 +429,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_end_civil_twilight(&self) -> Option<DateTime<Tz>> {
+    fn get_end_civil_twilight(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getEndCivilTwilight", InvocationArg::empty())
@@ -571,7 +437,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_end_nautical_twilight(&self) -> Option<DateTime<Tz>> {
+    fn get_end_nautical_twilight(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getEndNauticalTwilight", InvocationArg::empty())
@@ -579,7 +445,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_end_astronomical_twilight(&self) -> Option<DateTime<Tz>> {
+    fn get_end_astronomical_twilight(&self) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getEndAstronomicalTwilight", InvocationArg::empty())
@@ -587,7 +453,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_sunrise_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>> {
+    fn get_sunrise_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(
@@ -602,7 +468,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_sunset_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>> {
+    fn get_sunset_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(
@@ -615,58 +481,6 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
             )
             .ok()?;
         self.java_date_to_rust_datetime(&java_result)
-    }
-
-    fn get_utc_sunrise(&self, zenith: f64) -> Option<f64> {
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCSunrise",
-                &[InvocationArg::try_from(zenith).unwrap().into_primitive().unwrap()],
-            )
-            .ok()?;
-        let result = self.jvm.to_rust::<f64>(java_result).ok()?;
-        if result.is_nan() { None } else { Some(result) }
-    }
-
-    fn get_utc_sea_level_sunrise(&self, zenith: f64) -> Option<f64> {
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCSeaLevelSunrise",
-                &[InvocationArg::try_from(zenith).unwrap().into_primitive().unwrap()],
-            )
-            .ok()?;
-        let result = self.jvm.to_rust::<f64>(java_result).ok()?;
-        if result.is_nan() { None } else { Some(result) }
-    }
-
-    fn get_utc_sunset(&self, zenith: f64) -> Option<f64> {
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCSunset",
-                &[InvocationArg::try_from(zenith).unwrap().into_primitive().unwrap()],
-            )
-            .ok()?;
-        let result = self.jvm.to_rust::<f64>(java_result).ok()?;
-        if result.is_nan() { None } else { Some(result) }
-    }
-
-    fn get_utc_sea_level_sunset(&self, zenith: f64) -> Option<f64> {
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "getUTCSeaLevelSunset",
-                &[InvocationArg::try_from(zenith).unwrap().into_primitive().unwrap()],
-            )
-            .ok()?;
-        let result = self.jvm.to_rust::<f64>(java_result).ok()?;
-        if result.is_nan() { None } else { Some(result) }
     }
 
     fn get_temporal_hour(&self) -> Option<Duration> {
@@ -683,7 +497,11 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         }
     }
 
-    fn get_temporal_hour_from_times(&self, start_of_day: &DateTime<Tz>, end_of_day: &DateTime<Tz>) -> Option<Duration> {
+    fn get_temporal_hour_from_times(
+        &self,
+        start_of_day: &DateTime<chrono_tz::Tz>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
+    ) -> Option<Duration> {
         let java_start = self
             .jvm
             .create_instance(
@@ -721,27 +539,11 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         }
     }
 
-    fn get_sun_transit(&self) -> Option<DateTime<Tz>> {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getSunTransit", InvocationArg::empty())
-            .ok()?;
-        self.java_date_to_rust_datetime(&java_result)
-    }
-
-    fn get_solar_midnight(&self) -> Option<DateTime<Tz>> {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getSolarMidnight", InvocationArg::empty())
-            .ok()?;
-        self.java_date_to_rust_datetime(&java_result)
-    }
-
     fn get_sun_transit_from_times(
         &self,
-        start_of_day: &DateTime<Tz>,
-        end_of_day: &DateTime<Tz>,
-    ) -> Option<DateTime<Tz>> {
+        start_of_day: &DateTime<chrono_tz::Tz>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = dt_to_java_date(self.jvm, start_of_day);
         let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_result = self
@@ -755,7 +557,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_local_mean_time(&self, hours: f64) -> Option<DateTime<Tz>> {
+    fn get_local_mean_time(&self, hours: f64) -> Option<DateTime<chrono_tz::Tz>> {
         let java_result = self
             .jvm
             .invoke(
@@ -800,10 +602,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_half_day_based_zman_from_times(
         &self,
-        start_of_half_day: &DateTime<Tz>,
-        end_of_half_day: &DateTime<Tz>,
+        start_of_half_day: &DateTime<chrono_tz::Tz>,
+        end_of_half_day: &DateTime<chrono_tz::Tz>,
         hours: f64,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = dt_to_java_date(self.jvm, start_of_half_day);
         let java_end = dt_to_java_date(self.jvm, end_of_half_day);
         let java_result = self
@@ -823,8 +625,8 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_half_day_based_shaah_zmanis_from_times(
         &self,
-        start_of_half_day: &DateTime<Tz>,
-        end_of_half_day: &DateTime<Tz>,
+        start_of_half_day: &DateTime<chrono_tz::Tz>,
+        end_of_half_day: &DateTime<chrono_tz::Tz>,
     ) -> Option<Duration> {
         let java_start = dt_to_java_date(self.jvm, start_of_half_day);
         let java_end = dt_to_java_date(self.jvm, end_of_half_day);
@@ -841,10 +643,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_shaah_zmanis_based_zman_from_times(
         &self,
-        start_of_day: &DateTime<Tz>,
-        end_of_day: &DateTime<Tz>,
+        start_of_day: &DateTime<chrono_tz::Tz>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
         hours: f64,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = dt_to_java_date(self.jvm, start_of_day);
         let java_end = dt_to_java_date(self.jvm, end_of_day);
         let java_result = self
@@ -864,10 +666,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_sof_zman_shma_from_times(
         &self,
-        start_of_day: &DateTime<Tz>,
-        end_of_day: Option<&DateTime<Tz>>,
+        start_of_day: &DateTime<chrono_tz::Tz>,
+        end_of_day: Option<&DateTime<chrono_tz::Tz>>,
         synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = dt_to_java_date(self.jvm, start_of_day);
         let java_end = if let Some(end_of_day) = end_of_day {
             InvocationArg::from(dt_to_java_date(self.jvm, end_of_day))
@@ -888,10 +690,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<&DateTime<Tz>>,
-        end_of_day: &DateTime<Tz>,
+        start_of_day: Option<&DateTime<chrono_tz::Tz>>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
         synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
             InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
@@ -912,10 +714,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_sof_zman_tfila_from_times(
         &self,
-        start_of_day: &DateTime<Tz>,
-        end_of_day: Option<&DateTime<Tz>>,
+        start_of_day: &DateTime<chrono_tz::Tz>,
+        end_of_day: Option<&DateTime<chrono_tz::Tz>>,
         synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = dt_to_java_date(self.jvm, start_of_day);
         let java_end = if let Some(end_of_day) = end_of_day {
             InvocationArg::from(dt_to_java_date(self.jvm, end_of_day))
@@ -936,10 +738,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_mincha_gedola_from_times(
         &self,
-        start_of_day: Option<&DateTime<Tz>>,
-        end_of_day: &DateTime<Tz>,
+        start_of_day: Option<&DateTime<chrono_tz::Tz>>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
         synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
             InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
@@ -960,10 +762,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_plag_hamincha_from_times(
         &self,
-        start_of_day: Option<&DateTime<Tz>>,
-        end_of_day: &DateTime<Tz>,
+        start_of_day: Option<&DateTime<chrono_tz::Tz>>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
         synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
             InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
@@ -984,10 +786,10 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_samuch_le_mincha_ketana_from_times(
         &self,
-        start_of_day: Option<&DateTime<Tz>>,
-        end_of_day: &DateTime<Tz>,
+        start_of_day: Option<&DateTime<chrono_tz::Tz>>,
+        end_of_day: &DateTime<chrono_tz::Tz>,
         synchronous: bool,
-    ) -> Option<DateTime<Tz>> {
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_start = if let Some(start_of_day) = start_of_day {
             InvocationArg::from(dt_to_java_date(self.jvm, start_of_day))
         } else {
@@ -1008,9 +810,9 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_sof_zman_kidush_levana_15_days_from_times(
         &self,
-        alos: Option<&DateTime<Tz>>,
-        tzais: Option<&DateTime<Tz>>,
-    ) -> Option<DateTime<Tz>> {
+        alos: Option<&DateTime<chrono_tz::Tz>>,
+        tzais: Option<&DateTime<chrono_tz::Tz>>,
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
         } else {
@@ -1030,9 +832,9 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_sof_zman_kidush_levana_between_moldos_from_times(
         &self,
-        alos: Option<&DateTime<Tz>>,
-        tzais: Option<&DateTime<Tz>>,
-    ) -> Option<DateTime<Tz>> {
+        alos: Option<&DateTime<chrono_tz::Tz>>,
+        tzais: Option<&DateTime<chrono_tz::Tz>>,
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
         } else {
@@ -1056,9 +858,9 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_tchilas_zman_kidush_levana_3_days_from_times(
         &self,
-        alos: Option<&DateTime<Tz>>,
-        tzais: Option<&DateTime<Tz>>,
-    ) -> Option<DateTime<Tz>> {
+        alos: Option<&DateTime<chrono_tz::Tz>>,
+        tzais: Option<&DateTime<chrono_tz::Tz>>,
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
         } else {
@@ -1082,9 +884,9 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
 
     fn get_tchilas_zman_kidush_levana_7_days_from_times(
         &self,
-        alos: Option<&DateTime<Tz>>,
-        tzais: Option<&DateTime<Tz>>,
-    ) -> Option<DateTime<Tz>> {
+        alos: Option<&DateTime<chrono_tz::Tz>>,
+        tzais: Option<&DateTime<chrono_tz::Tz>>,
+    ) -> Option<DateTime<chrono_tz::Tz>> {
         let java_alos = if let Some(alos) = alos {
             InvocationArg::from(dt_to_java_date(self.jvm, alos))
         } else {
@@ -1106,7 +908,7 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
         self.java_date_to_rust_datetime(&java_result)
     }
 
-    fn get_zman(&self, zman: &Zman) -> Option<DateTime<Tz>> {
+    fn get_zman(&self, zman: &Zman) -> Option<DateTime<chrono_tz::Tz>> {
         let method_name = match zman {
             Zman::AlosHashachar => "getAlosHashachar",
             Zman::Alos72 => "getAlos72",
@@ -1129,998 +931,1036 @@ impl<'a, Tz: TimeZone> ZmanimCalendarTrait<Tz, GeoLocation, NOAACalculator> for 
             .ok()?;
         self.java_date_to_rust_datetime(&java_result)
     }
-}
 
-/// Very sketchy function to convert a JewishCalendarTrait to a JavaJewishCalendar instance
-/// This is acceptable for testing purposes
-fn java_jewish_calendar_trait_to_java_instance<T: JewishCalendarTrait>(jvm: &Jvm, jewish_calendar: &T) -> Instance {
-    unsafe {
-        let java_calendar = &*(jewish_calendar as *const T as *const JavaJewishCalendar);
-        jvm.clone_instance(&java_calendar.instance).ok().unwrap()
+    fn get_time_and_place(&self) -> &TimeAndPlace<chrono_tz::Tz> {
+        &self.time_and_place
     }
 }
 
-impl<'a> TefilaRulesTrait<JavaJewishCalendar<'a>> for JavaTefilaRules<'a> {
-    fn is_tachanun_recited_shacharis(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isTachanunRecitedShacharis",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+// /// Very sketchy function to convert a JewishCalendarTrait to a JavaJewishCalendar instance
+// /// This is acceptable for testing purposes
+// fn java_jewish_calendar_trait_to_java_instance<T: JewishCalendarTrait>(jvm: &Jvm, jewish_calendar: &T) -> Instance {
+//     unsafe {
+//         let java_calendar = &*(jewish_calendar as *const T as *const JavaJewishCalendar);
+//         jvm.clone_instance(&java_calendar.instance).ok().unwrap()
+//     }
+// }
 
-    fn is_tachanun_recited_mincha(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> Option<bool> {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isTachanunRecitedMincha",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        let result: bool = self.jvm.to_rust(java_result).unwrap();
-        Some(result)
-    }
+// impl<'a> TefilaRulesTrait<JavaJewishCalendar<'a>> for JavaTefilaRules<'a> {
+//     fn is_tachanun_recited_shacharis(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isTachanunRecitedShacharis",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_hallel_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "isHallelRecited", &[InvocationArg::from(java_calendar)])
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_tachanun_recited_mincha(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> Option<bool> {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isTachanunRecitedMincha",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         let result: bool = self.jvm.to_rust(java_result).unwrap();
+//         Some(result)
+//     }
 
-    fn is_hallel_shalem_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isHallelShalemRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_hallel_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "isHallelRecited", &[InvocationArg::from(java_calendar)])
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_al_hanissim_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isAlHanissimRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_hallel_shalem_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isHallelShalemRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_yaaleh_veyavo_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isYaalehVeyavoRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_al_hanissim_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isAlHanissimRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_mizmor_lesoda_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isMizmorLesodaRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_yaaleh_veyavo_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isYaalehVeyavoRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_vesein_tal_umatar_start_date(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isVeseinTalUmatarStartDate",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_mizmor_lesoda_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isMizmorLesodaRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_vesein_tal_umatar_starting_tonight(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isVeseinTalUmatarStartingTonight",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_vesein_tal_umatar_start_date(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isVeseinTalUmatarStartDate",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_vesein_tal_umatar_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isVeseinTalUmatarRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_vesein_tal_umatar_starting_tonight(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isVeseinTalUmatarStartingTonight",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_vesein_beracha_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isVeseinBerachaRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_vesein_tal_umatar_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isVeseinTalUmatarRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_mashiv_haruach_start_date(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isMashivHaruachStartDate",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_vesein_beracha_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isVeseinBerachaRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_mashiv_haruach_end_date(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isMashivHaruachEndDate",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
+//     fn is_mashiv_haruach_start_date(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isMashivHaruachStartDate",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_mashiv_haruach_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> Option<bool> {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isMashivHaruachRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        let result: bool = self.jvm.to_rust(java_result).unwrap();
-        Some(result)
-    }
+//     fn is_mashiv_haruach_end_date(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> bool {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isMashivHaruachEndDate",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
 
-    fn is_morid_hatal_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> Option<bool> {
-        let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
-        let java_result = self
-            .jvm
-            .invoke(
-                &self.instance,
-                "isMoridHatalRecited",
-                &[InvocationArg::from(java_calendar)],
-            )
-            .unwrap();
-        let result: bool = self.jvm.to_rust(java_result).unwrap();
-        Some(result)
-    }
-}
+//     fn is_mashiv_haruach_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> Option<bool> {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isMashivHaruachRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         let result: bool = self.jvm.to_rust(java_result).unwrap();
+//         Some(result)
+//     }
 
-pub struct JavaJewishCalendar<'a> {
-    pub jvm: &'a Jvm,
-    pub instance: Instance,
-    pub in_israel: bool,
-    pub is_mukaf_choma: bool,
-    pub use_modern_holidays: bool,
-}
+//     fn is_morid_hatal_recited(&self, jewish_calendar: &JavaJewishCalendar<'a>) -> Option<bool> {
+//         let java_calendar = java_jewish_calendar_trait_to_java_instance(self.jvm, jewish_calendar);
+//         let java_result = self
+//             .jvm
+//             .invoke(
+//                 &self.instance,
+//                 "isMoridHatalRecited",
+//                 &[InvocationArg::from(java_calendar)],
+//             )
+//             .unwrap();
+//         let result: bool = self.jvm.to_rust(java_result).unwrap();
+//         Some(result)
+//     }
+// }
 
-impl<'a> JavaJewishCalendar<'a> {
-    pub fn from_gregorian_date(
-        jvm: &'a Jvm,
-        year: i32,
-        month: i32,
-        day: i32,
-        in_israel: bool,
-        is_mukaf_choma: bool,
-        use_modern_holidays: bool,
-    ) -> Option<Self> {
-        let year_arg = InvocationArg::try_from(year).unwrap().into_primitive().unwrap();
-        let month_arg = InvocationArg::try_from(month).unwrap().into_primitive().unwrap();
-        let day_arg = InvocationArg::try_from(day).unwrap().into_primitive().unwrap();
-        let local_date = jvm
-            .invoke_static("java.time.LocalDate", "of", &[year_arg, month_arg, day_arg])
-            .unwrap();
-        let instance = jvm
-            .create_instance(
-                "com.kosherjava.zmanim.hebrewcalendar.JewishCalendar",
-                &[InvocationArg::from(local_date)],
-            )
-            .ok();
-        instance.as_ref()?;
-        let instance = instance.unwrap();
-        let self_ = Self {
-            jvm,
-            instance,
-            in_israel,
-            is_mukaf_choma,
-            use_modern_holidays,
-        };
-        self_.set_in_israel(in_israel);
-        self_.set_is_mukaf_choma(is_mukaf_choma);
-        self_.set_use_modern_holidays(use_modern_holidays);
-        Some(self_)
-    }
-    pub fn from_jewish_date(
-        jvm: &'a Jvm,
-        year: i32,
-        month: JewishMonth,
-        day: i32,
-        in_israel: bool,
-        is_mukaf_choma: bool,
-        use_modern_holidays: bool,
-    ) -> Option<Self> {
-        let year_arg = InvocationArg::try_from(year).unwrap().into_primitive().unwrap();
-        let month_arg = InvocationArg::try_from(month as i32).unwrap().into_primitive().unwrap();
-        let day_arg = InvocationArg::try_from(day).unwrap().into_primitive().unwrap();
-        let instance = jvm
-            .create_instance(
-                "com.kosherjava.zmanim.hebrewcalendar.JewishCalendar",
-                &[year_arg, month_arg, day_arg],
-            )
-            .ok();
-        instance.as_ref()?;
-        let instance = instance.unwrap();
-        let self_ = Self {
-            jvm,
-            instance,
-            in_israel,
-            is_mukaf_choma,
-            use_modern_holidays,
-        };
-        self_.set_in_israel(in_israel);
-        self_.set_is_mukaf_choma(is_mukaf_choma);
-        self_.set_use_modern_holidays(use_modern_holidays);
-        Some(self_)
-    }
-    fn set_is_mukaf_choma(&self, is_mukaf_choma: bool) {
-        self.jvm
-            .invoke(
-                &self.instance,
-                "setIsMukafChoma",
-                &[InvocationArg::try_from(is_mukaf_choma)
+// pub struct JavaJewishCalendar<'a> {
+//     pub jvm: &'a Jvm,
+//     pub instance: Instance,
+//     pub in_israel: bool,
+//     pub is_mukaf_choma: bool,
+//     pub use_modern_holidays: bool,
+// }
+
+// impl<'a> JavaJewishCalendar<'a> {
+//     pub fn from_gregorian_date(
+//         jvm: &'a Jvm,
+//         year: i32,
+//         month: i32,
+//         day: i32,
+//         in_israel: bool,
+//         is_mukaf_choma: bool,
+//         use_modern_holidays: bool,
+//     ) -> Option<Self> {
+//         let year_arg = InvocationArg::try_from(year).unwrap().into_primitive().unwrap();
+//         let month_arg = InvocationArg::try_from(month).unwrap().into_primitive().unwrap();
+//         let day_arg = InvocationArg::try_from(day).unwrap().into_primitive().unwrap();
+//         let local_date = jvm
+//             .invoke_static("java.time.LocalDate", "of", &[year_arg, month_arg, day_arg])
+//             .unwrap();
+//         let instance = jvm
+//             .create_instance(
+//                 "com.kosherjava.zmanim.hebrewcalendar.JewishCalendar",
+//                 &[InvocationArg::from(local_date)],
+//             )
+//             .ok();
+//         instance.as_ref()?;
+//         let instance = instance.unwrap();
+//         let self_ = Self {
+//             jvm,
+//             instance,
+//             in_israel,
+//             is_mukaf_choma,
+//             use_modern_holidays,
+//         };
+//         self_.set_in_israel(in_israel);
+//         self_.set_is_mukaf_choma(is_mukaf_choma);
+//         self_.set_use_modern_holidays(use_modern_holidays);
+//         Some(self_)
+//     }
+//     pub fn from_jewish_date(
+//         jvm: &'a Jvm,
+//         year: i32,
+//         month: JewishMonth,
+//         day: i32,
+//         in_israel: bool,
+//         is_mukaf_choma: bool,
+//         use_modern_holidays: bool,
+//     ) -> Option<Self> {
+//         let year_arg = InvocationArg::try_from(year).unwrap().into_primitive().unwrap();
+//         let month_arg = InvocationArg::try_from(month as i32).unwrap().into_primitive().unwrap();
+//         let day_arg = InvocationArg::try_from(day).unwrap().into_primitive().unwrap();
+//         let instance = jvm
+//             .create_instance(
+//                 "com.kosherjava.zmanim.hebrewcalendar.JewishCalendar",
+//                 &[year_arg, month_arg, day_arg],
+//             )
+//             .ok();
+//         instance.as_ref()?;
+//         let instance = instance.unwrap();
+//         let self_ = Self {
+//             jvm,
+//             instance,
+//             in_israel,
+//             is_mukaf_choma,
+//             use_modern_holidays,
+//         };
+//         self_.set_in_israel(in_israel);
+//         self_.set_is_mukaf_choma(is_mukaf_choma);
+//         self_.set_use_modern_holidays(use_modern_holidays);
+//         Some(self_)
+//     }
+//     fn set_is_mukaf_choma(&self, is_mukaf_choma: bool) {
+//         self.jvm
+//             .invoke(
+//                 &self.instance,
+//                 "setIsMukafChoma",
+//                 &[InvocationArg::try_from(is_mukaf_choma)
+//                     .unwrap()
+//                     .into_primitive()
+//                     .unwrap()],
+//             )
+//             .unwrap();
+//     }
+
+//     fn invoke_bool(&self, method: &str) -> bool {
+//         let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).unwrap();
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
+
+//     fn invoke_i64(&self, method: &str) -> i64 {
+//         let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).unwrap();
+//         self.jvm.to_rust::<i64>(java_result).unwrap()
+//     }
+//     #[allow(unused)]
+//     pub fn set_in_israel(&self, in_israel: bool) {
+//         self.jvm
+//             .invoke(
+//                 &self.instance,
+//                 "setInIsrael",
+//                 &[InvocationArg::try_from(in_israel).unwrap().into_primitive().unwrap()],
+//             )
+//             .unwrap();
+//     }
+
+//     #[allow(unused)]
+//     pub fn set_mukaf_choma(&self, mukaf_choma: bool) {
+//         self.jvm
+//             .invoke(
+//                 &self.instance,
+//                 "setIsMukafChoma",
+//                 &[InvocationArg::try_from(mukaf_choma).unwrap().into_primitive().unwrap()],
+//             )
+//             .unwrap();
+//     }
+
+//     #[allow(unused)]
+//     pub fn set_use_modern_holidays(&self, use_modern_holidays: bool) {
+//         self.jvm
+//             .invoke(
+//                 &self.instance,
+//                 "setUseModernHolidays",
+//                 &[InvocationArg::try_from(use_modern_holidays)
+//                     .unwrap()
+//                     .into_primitive()
+//                     .unwrap()],
+//             )
+//             .unwrap();
+//     }
+
+//     fn java_date_to_rust_datetime(&self, java_date: &Instance) -> Option<DateTime<Utc>> {
+//         let is_null = self
+//             .jvm
+//             .check_equals(java_date, InvocationArg::try_from(Null::Of("java.util.Date")).unwrap())
+//             .unwrap();
+//         if is_null {
+//             return None;
+//         }
+
+//         let millis = self
+//             .jvm
+//             .to_rust::<i64>(self.jvm.invoke(java_date, "getTime", InvocationArg::empty()).unwrap())
+//             .unwrap();
+
+//         DateTime::<Utc>::from_timestamp_millis(millis)
+//     }
+
+//     fn invoke_date(&self, method: &str) -> Option<DateTime<Utc>> {
+//         let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).ok()?;
+//         self.java_date_to_rust_datetime(&java_result)
+//     }
+
+//     fn parsha_from_java(&self, method: &str) -> Option<Parsha> {
+//         let java_parsha = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).ok()?;
+//         let ordinal_instance = self.jvm.invoke(&java_parsha, "ordinal", InvocationArg::empty()).ok()?;
+//         let ordinal = self.jvm.to_rust::<i32>(ordinal_instance).ok()?;
+//         if ordinal == 0 {
+//             None
+//         } else {
+//             Parsha::try_from((ordinal - 1) as u8).ok()
+//         }
+//     }
+// }
+
+// impl<'a> JewishCalendarTrait for JavaJewishCalendar<'a> {
+//     fn get_jewish_year(&self) -> i32 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getJewishYear", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<i32>(java_result).unwrap()
+//     }
+
+//     fn get_jewish_month(&self) -> JewishMonth {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getJewishMonth", InvocationArg::empty())
+//             .unwrap();
+//         let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
+//         java_result.try_into().unwrap()
+//     }
+//     fn get_jewish_day_of_month(&self) -> u8 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getJewishDayOfMonth", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<u8>(java_result).unwrap()
+//     }
+//     fn get_gregorian_year(&self) -> i32 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getGregorianYear", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<i32>(java_result).unwrap()
+//     }
+//     fn get_gregorian_month(&self) -> u8 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getGregorianMonth", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<u8>(java_result).unwrap()
+//     }
+
+//     fn get_gregorian_day_of_month(&self) -> u8 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getGregorianDayOfMonth", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<u8>(java_result).unwrap()
+//     }
+
+//     fn get_day_of_week(&self) -> Weekday {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getDayOfWeek", InvocationArg::empty())
+//             .unwrap();
+//         let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
+//         match java_result {
+//             1 => Weekday::Sun,
+//             2 => Weekday::Mon,
+//             3 => Weekday::Tue,
+//             4 => Weekday::Wed,
+//             5 => Weekday::Thu,
+//             6 => Weekday::Fri,
+//             7 => Weekday::Sat,
+//             _ => unreachable!(),
+//         }
+//     }
+
+//     fn is_jewish_leap_year(&self) -> bool {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "isJewishLeapYear", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
+
+//     fn get_days_in_jewish_year(&self) -> i32 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getDaysInJewishYear", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<i32>(java_result).unwrap()
+//     }
+
+//     fn get_days_in_jewish_month(&self) -> u8 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getDaysInJewishMonth", InvocationArg::empty())
+//             .unwrap();
+//         self.jvm.to_rust::<u8>(java_result).unwrap()
+//     }
+
+//     fn is_cheshvan_long(&self) -> bool {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "isCheshvanLong", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
+
+//     fn is_kislev_short(&self) -> bool {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "isKislevShort", InvocationArg::empty())
+//             .unwrap();
+
+//         self.jvm.to_rust::<bool>(java_result).unwrap()
+//     }
+
+//     fn get_cheshvan_kislev_kviah(&self) -> crate::constants::YearLengthType {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getCheshvanKislevKviah", InvocationArg::empty())
+//             .unwrap();
+//         let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
+//         java_result.try_into().unwrap()
+//     }
+
+//     fn get_days_since_start_of_jewish_year(&self) -> i32 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getDaysSinceStartOfJewishYear", InvocationArg::empty())
+//             .unwrap();
+//         self.jvm.to_rust::<i32>(java_result).unwrap()
+//     }
+
+//     fn get_chalakim_since_molad_tohu(&self) -> i64 {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getChalakimSinceMoladTohu", InvocationArg::empty())
+//             .unwrap();
+//         self.jvm.to_rust::<i64>(java_result).unwrap()
+//     }
+//     #[allow(refining_impl_trait)]
+//     fn get_molad_as_calendar(&self) -> Option<JavaJewishCalendar<'a>> {
+//         let java_molad = self
+//             .jvm
+//             .invoke(&self.instance, "getMolad", InvocationArg::empty())
+//             .unwrap();
+//         let is_null = self
+//             .jvm
+//             .check_equals(
+//                 &java_molad,
+//                 InvocationArg::try_from(Null::Of("java.util.Date")).unwrap(),
+//             )
+//             .unwrap();
+//         if is_null {
+//             return None;
+//         }
+
+//         let java_year = self
+//             .jvm
+//             .invoke(&java_molad, "getJewishYear", InvocationArg::empty())
+//             .unwrap();
+//         let java_year = self.jvm.to_rust::<i32>(java_year).unwrap();
+
+//         let java_month = self
+//             .jvm
+//             .invoke(&java_molad, "getJewishMonth", InvocationArg::empty())
+//             .unwrap();
+//         let java_month = self.jvm.to_rust::<u8>(java_month).unwrap();
+
+//         let java_day = self
+//             .jvm
+//             .invoke(&java_molad, "getJewishDayOfMonth", InvocationArg::empty())
+//             .unwrap();
+//         let java_day = self.jvm.to_rust::<i32>(java_day).unwrap();
+//         Some(
+//             JavaJewishCalendar::from_jewish_date(
+//                 self.jvm,
+//                 java_year,
+//                 java_month.try_into().unwrap(),
+//                 java_day,
+//                 self.in_israel,
+//                 self.is_mukaf_choma,
+//                 self.use_modern_holidays,
+//             )
+//             .unwrap(),
+//         )
+//     }
+
+//     fn get_molad(&self) -> Option<MoladData> {
+//         let java_molad = self
+//             .jvm
+//             .invoke(&self.instance, "getMolad", InvocationArg::empty())
+//             .unwrap();
+//         let is_null = self
+//             .jvm
+//             .check_equals(
+//                 &java_molad,
+//                 InvocationArg::try_from(Null::Of("java.util.Date")).unwrap(),
+//             )
+//             .unwrap();
+//         if is_null {
+//             return None;
+//         }
+
+//         let java_hours = self
+//             .jvm
+//             .invoke(&java_molad, "getMoladHours", InvocationArg::empty())
+//             .unwrap();
+//         let java_hours = self.jvm.to_rust::<i64>(java_hours).unwrap();
+
+//         let java_minutes = self
+//             .jvm
+//             .invoke(&java_molad, "getMoladMinutes", InvocationArg::empty())
+//             .unwrap();
+//         let java_minutes = self.jvm.to_rust::<i64>(java_minutes).unwrap();
+
+//         let java_chalakim = self
+//             .jvm
+//             .invoke(&java_molad, "getMoladChalakim", InvocationArg::empty())
+//             .unwrap();
+//         let java_chalakim = self.jvm.to_rust::<i64>(java_chalakim).unwrap();
+//         Some(MoladData {
+//             hours: java_hours,
+//             minutes: java_minutes,
+//             chalakim: java_chalakim,
+//         })
+//     }
+//     fn get_yom_tov_index(&self) -> Option<crate::constants::JewishHoliday> {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getYomTovIndex", InvocationArg::empty())
+//             .unwrap();
+//         let index = self.jvm.to_rust::<i32>(java_result).unwrap();
+//         if index == -1 {
+//             None
+//         } else {
+//             JewishHoliday::try_from(index as u8).ok()
+//         }
+//     }
+
+//     fn is_yom_tov(&self) -> bool {
+//         self.invoke_bool("isYomTov")
+//     }
+
+//     fn is_yom_tov_assur_bemelacha(&self) -> bool {
+//         self.invoke_bool("isYomTovAssurBemelacha")
+//     }
+
+//     fn is_assur_bemelacha(&self) -> bool {
+//         self.invoke_bool("isAssurBemelacha")
+//     }
+
+//     fn has_candle_lighting(&self) -> bool {
+//         self.invoke_bool("hasCandleLighting")
+//     }
+
+//     fn is_tomorrow_shabbos_or_yom_tov(&self) -> bool {
+//         self.invoke_bool("isTomorrowShabbosOrYomTov")
+//     }
+
+//     fn is_erev_yom_tov_sheni(&self) -> bool {
+//         self.invoke_bool("isErevYomTovSheni")
+//     }
+
+//     fn is_aseres_yemei_teshuva(&self) -> bool {
+//         self.invoke_bool("isAseresYemeiTeshuva")
+//     }
+
+//     fn is_pesach(&self) -> bool {
+//         self.invoke_bool("isPesach")
+//     }
+
+//     fn is_chol_hamoed_pesach(&self) -> bool {
+//         self.invoke_bool("isCholHamoedPesach")
+//     }
+
+//     fn is_shavuos(&self) -> bool {
+//         self.invoke_bool("isShavuos")
+//     }
+
+//     fn is_rosh_hashana(&self) -> bool {
+//         self.invoke_bool("isRoshHashana")
+//     }
+
+//     fn is_yom_kippur(&self) -> bool {
+//         self.invoke_bool("isYomKippur")
+//     }
+
+//     fn is_succos(&self) -> bool {
+//         self.invoke_bool("isSuccos")
+//     }
+
+//     fn is_hoshana_rabba(&self) -> bool {
+//         self.invoke_bool("isHoshanaRabba")
+//     }
+
+//     fn is_shemini_atzeres(&self) -> bool {
+//         self.invoke_bool("isShminiAtzeres")
+//     }
+
+//     fn is_simchas_torah(&self) -> bool {
+//         self.invoke_bool("isSimchasTorah")
+//     }
+
+//     fn is_chol_hamoed_succos(&self) -> bool {
+//         self.invoke_bool("isCholHamoedSuccos")
+//     }
+
+//     fn is_chol_hamoed(&self) -> bool {
+//         self.invoke_bool("isCholHamoed")
+//     }
+
+//     fn is_erev_yom_tov(&self) -> bool {
+//         self.invoke_bool("isErevYomTov")
+//     }
+
+//     fn is_rosh_chodesh(&self) -> bool {
+//         self.invoke_bool("isRoshChodesh")
+//     }
+
+//     fn is_isru_chag(&self) -> bool {
+//         self.invoke_bool("isIsruChag")
+//     }
+
+//     fn is_taanis(&self) -> bool {
+//         self.invoke_bool("isTaanis")
+//     }
+
+//     fn is_taanis_bechoros(&self) -> bool {
+//         self.invoke_bool("isTaanisBechoros")
+//     }
+
+//     fn get_day_of_chanukah(&self) -> Option<u8> {
+//         let result = self.invoke_i64("getDayOfChanukah");
+//         if result == -1 { None } else { Some(result as u8) }
+//     }
+
+//     fn is_chanukah(&self) -> bool {
+//         self.invoke_bool("isChanukah")
+//     }
+
+//     fn is_purim(&self) -> bool {
+//         self.invoke_bool("isPurim")
+//     }
+
+//     fn get_day_of_omer(&self) -> Option<u8> {
+//         let result = self.invoke_i64("getDayOfOmer");
+//         if result == -1 { None } else { Some(result as u8) }
+//     }
+
+//     fn is_tisha_beav(&self) -> bool {
+//         self.invoke_bool("isTishaBav")
+//     }
+
+//     fn get_parshah(&self) -> Option<crate::constants::Parsha> {
+//         self.parsha_from_java("getParshah")
+//     }
+
+//     fn get_daf_yomi_bavli(&self) -> Option<crate::daf::BavliDaf> {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getDafYomiBavli", InvocationArg::empty())
+//             .ok()?;
+//         let is_null = self
+//             .jvm
+//             .check_equals(
+//                 &java_result,
+//                 InvocationArg::try_from(Null::Of("com.kosherjava.zmanim.hebrewcalendar.Daf")).unwrap(),
+//             )
+//             .unwrap();
+//         if is_null {
+//             return None;
+//         }
+
+//         let masechta = self
+//             .jvm
+//             .invoke(&java_result, "getMasechtaNumber", InvocationArg::empty())
+//             .ok()
+//             .and_then(|m| self.jvm.to_rust::<i32>(m).ok())?;
+//         let daf_index = self
+//             .jvm
+//             .invoke(&java_result, "getDaf", InvocationArg::empty())
+//             .ok()
+//             .and_then(|d| self.jvm.to_rust::<i32>(d).ok())?;
+
+//         let tractate = crate::constants::BavliTractate::try_from(masechta as u8).ok()?;
+
+//         Some(BavliDaf {
+//             tractate,
+//             daf_index: daf_index as i64,
+//         })
+//     }
+
+//     fn get_daf_yomi_yerushalmi(&self) -> Option<crate::daf::YerushalmiDaf> {
+//         let java_result = self
+//             .jvm
+//             .invoke(&self.instance, "getDafYomiYerushalmi", InvocationArg::empty())
+//             .ok()?;
+//         let is_null = self
+//             .jvm
+//             .check_equals(
+//                 &java_result,
+//                 InvocationArg::try_from(Null::Of("com.kosherjava.zmanim.hebrewcalendar.Daf")).unwrap(),
+//             )
+//             .unwrap();
+//         if is_null {
+//             return None;
+//         }
+
+//         let masechta = self
+//             .jvm
+//             .invoke(&java_result, "getMasechtaNumber", InvocationArg::empty())
+//             .ok()
+//             .and_then(|m| self.jvm.to_rust::<i32>(m).ok())?;
+
+//         // The Java implementation uses 39 (No Daf Today) as a sentinel.
+//         if masechta >= 39 {
+//             return None;
+//         }
+
+//         let daf_index = self
+//             .jvm
+//             .invoke(&java_result, "getDaf", InvocationArg::empty())
+//             .ok()
+//             .and_then(|d| self.jvm.to_rust::<i32>(d).ok())?;
+
+//         let tractate = crate::constants::YerushalmiTractate::try_from(masechta as i64).ok()?;
+
+//         Some(YerushalmiDaf {
+//             tractate,
+//             daf_index: daf_index as i64,
+//         })
+//     }
+
+//     fn is_birkas_hachamah(&self) -> bool {
+//         self.invoke_bool("isBirkasHachamah")
+//     }
+
+//     fn is_erev_rosh_chodesh(&self) -> bool {
+//         self.invoke_bool("isErevRoshChodesh")
+//     }
+
+//     fn is_yom_kippur_katan(&self) -> bool {
+//         self.invoke_bool("isYomKippurKatan")
+//     }
+
+//     fn is_be_hab(&self) -> bool {
+//         self.invoke_bool("isBeHaB")
+//     }
+
+//     fn is_machar_chodesh(&self) -> bool {
+//         self.invoke_bool("isMacharChodesh")
+//     }
+
+//     fn is_shabbos_mevorchim(&self) -> bool {
+//         self.invoke_bool("isShabbosMevorchim")
+//     }
+
+//     fn get_upcoming_parshah(&self) -> Option<crate::constants::Parsha> {
+//         self.parsha_from_java("getUpcomingParshah")
+//     }
+
+//     fn get_special_shabbos(&self) -> Option<crate::constants::Parsha> {
+//         self.parsha_from_java("getSpecialShabbos")
+//     }
+
+//     fn get_molad_as_date(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+//         self.invoke_date("getMoladAsDate")
+//     }
+
+//     fn get_tchilaszman_kidush_levana_3_days(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+//         self.invoke_date("getTchilasZmanKidushLevana3Days")
+//     }
+
+//     fn get_tchilaszman_kidush_levana_7_days(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+//         self.invoke_date("getTchilasZmanKidushLevana7Days")
+//     }
+
+//     fn get_sof_zman_kidush_levana_between_moldos(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+//         self.invoke_date("getSofZmanKidushLevanaBetweenMoldos")
+//     }
+
+//     fn get_sof_zman_kidush_levana_15_days(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+//         self.invoke_date("getSofZmanKidushLevana15Days")
+//     }
+
+//     fn get_tekufas_tishrei_elapsed_days(&self) -> i64 {
+//         self.invoke_i64("getTekufasTishreiElapsedDays")
+//     }
+
+//     fn is_vesein_tal_umatar_start_date(&self) -> bool {
+//         self.invoke_bool("isVeseinTalUmatarStartDate")
+//     }
+
+//     fn is_vesein_tal_umatar_starting_tonight(&self) -> bool {
+//         self.invoke_bool("isVeseinTalUmatarStartingTonight")
+//     }
+
+//     fn is_vesein_tal_umatar_recited(&self) -> bool {
+//         self.invoke_bool("isVeseinTalUmatarRecited")
+//     }
+
+//     fn is_vesein_beracha_recited(&self) -> bool {
+//         self.invoke_bool("isVeseinBerachaRecited")
+//     }
+
+//     fn is_mashiv_haruach_start_date(&self) -> bool {
+//         self.invoke_bool("isMashivHaruachStartDate")
+//     }
+
+//     fn is_mashiv_haruach_end_date(&self) -> bool {
+//         self.invoke_bool("isMashivHaruachEndDate")
+//     }
+
+//     fn is_mashiv_haruach_recited(&self) -> Option<bool> {
+//         Some(self.invoke_bool("isMashivHaruachRecited"))
+//     }
+
+//     fn is_morid_hatal_recited(&self) -> Option<bool> {
+//         Some(self.invoke_bool("isMoridHatalRecited"))
+//     }
+// }
+
+// pub struct JavaTefilaRules<'a> {
+//     pub jvm: &'a Jvm,
+//     pub instance: Instance,
+// }
+// fn bool_to_invocation_arg(bool: bool) -> InvocationArg {
+//     InvocationArg::try_from(bool).unwrap().into_primitive().unwrap()
+// }
+// impl<'a> JavaTefilaRules<'a> {
+//     #[allow(clippy::too_many_arguments)]
+//     pub fn new(
+//         jvm: &'a Jvm,
+//         tachanun_recited_end_of_tishrei: bool,
+//         tachanun_recited_week_after_shavuos: bool,
+//         tachanun_recited_13_sivan_out_of_israel: bool,
+//         tachanun_recited_pesach_sheni: bool,
+//         tachanun_recited_15_iyar_out_of_israel: bool,
+//         tachanun_recited_mincha_erev_lag_baomer: bool,
+//         tachanun_recited_shivas_yemei_hamiluim: bool,
+//         tachanun_recited_week_of_hod: bool,
+//         tachanun_recited_week_of_purim: bool,
+//         tachanun_recited_fridays: bool,
+//         tachanun_recited_sundays: bool,
+//         tachanun_recited_mincha_all_year: bool,
+//         mizmor_lesoda_recited_erev_yom_kippur_and_pesach: bool,
+//     ) -> Self {
+//         let instance = jvm
+//             .create_instance(
+//                 "com.kosherjava.zmanim.hebrewcalendar.TefilaRules",
+//                 InvocationArg::empty(),
+//             )
+//             .unwrap();
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedWeekOfPurim",
+//             &[bool_to_invocation_arg(tachanun_recited_week_of_purim)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedWeekOfHod",
+//             &[bool_to_invocation_arg(tachanun_recited_week_of_hod)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedEndOfTishrei",
+//             &[bool_to_invocation_arg(tachanun_recited_end_of_tishrei)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedWeekAfterShavuos",
+//             &[bool_to_invocation_arg(tachanun_recited_week_after_shavuos)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecited13SivanOutOfIsrael",
+//             &[bool_to_invocation_arg(tachanun_recited_13_sivan_out_of_israel)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedPesachSheni",
+//             &[bool_to_invocation_arg(tachanun_recited_pesach_sheni)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecited15IyarOutOfIsrael",
+//             &[bool_to_invocation_arg(tachanun_recited_15_iyar_out_of_israel)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedMinchaErevLagBaomer",
+//             &[bool_to_invocation_arg(tachanun_recited_mincha_erev_lag_baomer)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedShivasYemeiHamiluim",
+//             &[bool_to_invocation_arg(tachanun_recited_shivas_yemei_hamiluim)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedFridays",
+//             &[bool_to_invocation_arg(tachanun_recited_fridays)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedSundays",
+//             &[bool_to_invocation_arg(tachanun_recited_sundays)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setTachanunRecitedMinchaAllYear",
+//             &[bool_to_invocation_arg(tachanun_recited_mincha_all_year)],
+//         );
+//         let _ = jvm.invoke(
+//             &instance,
+//             "setMizmorLesodaRecitedErevYomKippurAndPesach",
+//             &[bool_to_invocation_arg(mizmor_lesoda_recited_erev_yom_kippur_and_pesach)],
+//         );
+//         Self { jvm, instance }
+//     }
+// }
+/// Converts a Rust GeoLocation to a Java GeoLocation instance.
+///
+/// Returns None if the timezone cannot be converted to Java.
+pub fn geolocation_to_java_geolocation(jvm: &Jvm, time_and_place: &TimeAndPlace<chrono_tz::Tz>) -> Option<Instance> {
+    let timezone_id = time_and_place.date_time.timezone().name();
+    let java_timezone = tz_to_java_timezone(jvm, timezone_id);
+
+    let instance = jvm
+        .create_instance(
+            "com.kosherjava.zmanim.util.GeoLocation",
+            &[
+                InvocationArg::try_from("Name").unwrap(),
+                InvocationArg::try_from(time_and_place.latitude)
                     .unwrap()
                     .into_primitive()
-                    .unwrap()],
-            )
-            .unwrap();
-    }
-
-    fn invoke_bool(&self, method: &str) -> bool {
-        let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).unwrap();
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
-
-    fn invoke_i64(&self, method: &str) -> i64 {
-        let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).unwrap();
-        self.jvm.to_rust::<i64>(java_result).unwrap()
-    }
-    #[allow(unused)]
-    pub fn set_in_israel(&self, in_israel: bool) {
-        self.jvm
-            .invoke(
-                &self.instance,
-                "setInIsrael",
-                &[InvocationArg::try_from(in_israel).unwrap().into_primitive().unwrap()],
-            )
-            .unwrap();
-    }
-
-    #[allow(unused)]
-    pub fn set_mukaf_choma(&self, mukaf_choma: bool) {
-        self.jvm
-            .invoke(
-                &self.instance,
-                "setIsMukafChoma",
-                &[InvocationArg::try_from(mukaf_choma).unwrap().into_primitive().unwrap()],
-            )
-            .unwrap();
-    }
-
-    #[allow(unused)]
-    pub fn set_use_modern_holidays(&self, use_modern_holidays: bool) {
-        self.jvm
-            .invoke(
-                &self.instance,
-                "setUseModernHolidays",
-                &[InvocationArg::try_from(use_modern_holidays)
+                    .unwrap(),
+                InvocationArg::try_from(time_and_place.longitude)
                     .unwrap()
                     .into_primitive()
-                    .unwrap()],
-            )
-            .unwrap();
-    }
-
-    fn java_date_to_rust_datetime(&self, java_date: &Instance) -> Option<DateTime<Utc>> {
-        let is_null = self
-            .jvm
-            .check_equals(java_date, InvocationArg::try_from(Null::Of("java.util.Date")).unwrap())
-            .unwrap();
-        if is_null {
-            return None;
-        }
-
-        let millis = self
-            .jvm
-            .to_rust::<i64>(self.jvm.invoke(java_date, "getTime", InvocationArg::empty()).unwrap())
-            .unwrap();
-
-        DateTime::<Utc>::from_timestamp_millis(millis)
-    }
-
-    fn invoke_date(&self, method: &str) -> Option<DateTime<Utc>> {
-        let java_result = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).ok()?;
-        self.java_date_to_rust_datetime(&java_result)
-    }
-
-    fn parsha_from_java(&self, method: &str) -> Option<Parsha> {
-        let java_parsha = self.jvm.invoke(&self.instance, method, InvocationArg::empty()).ok()?;
-        let ordinal_instance = self.jvm.invoke(&java_parsha, "ordinal", InvocationArg::empty()).ok()?;
-        let ordinal = self.jvm.to_rust::<i32>(ordinal_instance).ok()?;
-        if ordinal == 0 {
-            None
-        } else {
-            Parsha::try_from((ordinal - 1) as u8).ok()
-        }
-    }
-}
-
-impl<'a> JewishCalendarTrait for JavaJewishCalendar<'a> {
-    fn get_jewish_year(&self) -> i32 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getJewishYear", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<i32>(java_result).unwrap()
-    }
-
-    fn get_jewish_month(&self) -> JewishMonth {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getJewishMonth", InvocationArg::empty())
-            .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result.try_into().unwrap()
-    }
-    fn get_jewish_day_of_month(&self) -> u8 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getJewishDayOfMonth", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<u8>(java_result).unwrap()
-    }
-    fn get_gregorian_year(&self) -> i32 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getGregorianYear", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<i32>(java_result).unwrap()
-    }
-    fn get_gregorian_month(&self) -> u8 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getGregorianMonth", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<u8>(java_result).unwrap()
-    }
-
-    fn get_gregorian_day_of_month(&self) -> u8 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getGregorianDayOfMonth", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<u8>(java_result).unwrap()
-    }
-
-    fn get_day_of_week(&self) -> Weekday {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getDayOfWeek", InvocationArg::empty())
-            .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        match java_result {
-            1 => Weekday::Sun,
-            2 => Weekday::Mon,
-            3 => Weekday::Tue,
-            4 => Weekday::Wed,
-            5 => Weekday::Thu,
-            6 => Weekday::Fri,
-            7 => Weekday::Sat,
-            _ => unreachable!(),
-        }
-    }
-
-    fn is_jewish_leap_year(&self) -> bool {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "isJewishLeapYear", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
-
-    fn get_days_in_jewish_year(&self) -> i32 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getDaysInJewishYear", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<i32>(java_result).unwrap()
-    }
-
-    fn get_days_in_jewish_month(&self) -> u8 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getDaysInJewishMonth", InvocationArg::empty())
-            .unwrap();
-        self.jvm.to_rust::<u8>(java_result).unwrap()
-    }
-
-    fn is_cheshvan_long(&self) -> bool {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "isCheshvanLong", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
-
-    fn is_kislev_short(&self) -> bool {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "isKislevShort", InvocationArg::empty())
-            .unwrap();
-
-        self.jvm.to_rust::<bool>(java_result).unwrap()
-    }
-
-    fn get_cheshvan_kislev_kviah(&self) -> crate::constants::YearLengthType {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getCheshvanKislevKviah", InvocationArg::empty())
-            .unwrap();
-        let java_result = self.jvm.to_rust::<u8>(java_result).unwrap();
-        java_result.try_into().unwrap()
-    }
-
-    fn get_days_since_start_of_jewish_year(&self) -> i32 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getDaysSinceStartOfJewishYear", InvocationArg::empty())
-            .unwrap();
-        self.jvm.to_rust::<i32>(java_result).unwrap()
-    }
-
-    fn get_chalakim_since_molad_tohu(&self) -> i64 {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getChalakimSinceMoladTohu", InvocationArg::empty())
-            .unwrap();
-        self.jvm.to_rust::<i64>(java_result).unwrap()
-    }
-    #[allow(refining_impl_trait)]
-    fn get_molad_as_calendar(&self) -> Option<JavaJewishCalendar<'a>> {
-        let java_molad = self
-            .jvm
-            .invoke(&self.instance, "getMolad", InvocationArg::empty())
-            .unwrap();
-        let is_null = self
-            .jvm
-            .check_equals(
-                &java_molad,
-                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap(),
-            )
-            .unwrap();
-        if is_null {
-            return None;
-        }
-
-        let java_year = self
-            .jvm
-            .invoke(&java_molad, "getJewishYear", InvocationArg::empty())
-            .unwrap();
-        let java_year = self.jvm.to_rust::<i32>(java_year).unwrap();
-
-        let java_month = self
-            .jvm
-            .invoke(&java_molad, "getJewishMonth", InvocationArg::empty())
-            .unwrap();
-        let java_month = self.jvm.to_rust::<u8>(java_month).unwrap();
-
-        let java_day = self
-            .jvm
-            .invoke(&java_molad, "getJewishDayOfMonth", InvocationArg::empty())
-            .unwrap();
-        let java_day = self.jvm.to_rust::<i32>(java_day).unwrap();
-        Some(
-            JavaJewishCalendar::from_jewish_date(
-                self.jvm,
-                java_year,
-                java_month.try_into().unwrap(),
-                java_day,
-                self.in_israel,
-                self.is_mukaf_choma,
-                self.use_modern_holidays,
-            )
-            .unwrap(),
+                    .unwrap(),
+                InvocationArg::try_from(time_and_place.elevation)
+                    .unwrap()
+                    .into_primitive()
+                    .unwrap(),
+                InvocationArg::from(java_timezone),
+            ],
         )
-    }
-
-    fn get_molad(&self) -> Option<MoladData> {
-        let java_molad = self
-            .jvm
-            .invoke(&self.instance, "getMolad", InvocationArg::empty())
-            .unwrap();
-        let is_null = self
-            .jvm
-            .check_equals(
-                &java_molad,
-                InvocationArg::try_from(Null::Of("java.util.Date")).unwrap(),
-            )
-            .unwrap();
-        if is_null {
-            return None;
-        }
-
-        let java_hours = self
-            .jvm
-            .invoke(&java_molad, "getMoladHours", InvocationArg::empty())
-            .unwrap();
-        let java_hours = self.jvm.to_rust::<i64>(java_hours).unwrap();
-
-        let java_minutes = self
-            .jvm
-            .invoke(&java_molad, "getMoladMinutes", InvocationArg::empty())
-            .unwrap();
-        let java_minutes = self.jvm.to_rust::<i64>(java_minutes).unwrap();
-
-        let java_chalakim = self
-            .jvm
-            .invoke(&java_molad, "getMoladChalakim", InvocationArg::empty())
-            .unwrap();
-        let java_chalakim = self.jvm.to_rust::<i64>(java_chalakim).unwrap();
-        Some(MoladData {
-            hours: java_hours,
-            minutes: java_minutes,
-            chalakim: java_chalakim,
-        })
-    }
-    fn get_yom_tov_index(&self) -> Option<crate::constants::JewishHoliday> {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getYomTovIndex", InvocationArg::empty())
-            .unwrap();
-        let index = self.jvm.to_rust::<i32>(java_result).unwrap();
-        if index == -1 {
-            None
-        } else {
-            JewishHoliday::try_from(index as u8).ok()
-        }
-    }
-
-    fn is_yom_tov(&self) -> bool {
-        self.invoke_bool("isYomTov")
-    }
-
-    fn is_yom_tov_assur_bemelacha(&self) -> bool {
-        self.invoke_bool("isYomTovAssurBemelacha")
-    }
-
-    fn is_assur_bemelacha(&self) -> bool {
-        self.invoke_bool("isAssurBemelacha")
-    }
-
-    fn has_candle_lighting(&self) -> bool {
-        self.invoke_bool("hasCandleLighting")
-    }
-
-    fn is_tomorrow_shabbos_or_yom_tov(&self) -> bool {
-        self.invoke_bool("isTomorrowShabbosOrYomTov")
-    }
-
-    fn is_erev_yom_tov_sheni(&self) -> bool {
-        self.invoke_bool("isErevYomTovSheni")
-    }
-
-    fn is_aseres_yemei_teshuva(&self) -> bool {
-        self.invoke_bool("isAseresYemeiTeshuva")
-    }
-
-    fn is_pesach(&self) -> bool {
-        self.invoke_bool("isPesach")
-    }
-
-    fn is_chol_hamoed_pesach(&self) -> bool {
-        self.invoke_bool("isCholHamoedPesach")
-    }
-
-    fn is_shavuos(&self) -> bool {
-        self.invoke_bool("isShavuos")
-    }
-
-    fn is_rosh_hashana(&self) -> bool {
-        self.invoke_bool("isRoshHashana")
-    }
-
-    fn is_yom_kippur(&self) -> bool {
-        self.invoke_bool("isYomKippur")
-    }
-
-    fn is_succos(&self) -> bool {
-        self.invoke_bool("isSuccos")
-    }
-
-    fn is_hoshana_rabba(&self) -> bool {
-        self.invoke_bool("isHoshanaRabba")
-    }
-
-    fn is_shemini_atzeres(&self) -> bool {
-        self.invoke_bool("isShminiAtzeres")
-    }
-
-    fn is_simchas_torah(&self) -> bool {
-        self.invoke_bool("isSimchasTorah")
-    }
-
-    fn is_chol_hamoed_succos(&self) -> bool {
-        self.invoke_bool("isCholHamoedSuccos")
-    }
-
-    fn is_chol_hamoed(&self) -> bool {
-        self.invoke_bool("isCholHamoed")
-    }
-
-    fn is_erev_yom_tov(&self) -> bool {
-        self.invoke_bool("isErevYomTov")
-    }
-
-    fn is_rosh_chodesh(&self) -> bool {
-        self.invoke_bool("isRoshChodesh")
-    }
-
-    fn is_isru_chag(&self) -> bool {
-        self.invoke_bool("isIsruChag")
-    }
-
-    fn is_taanis(&self) -> bool {
-        self.invoke_bool("isTaanis")
-    }
-
-    fn is_taanis_bechoros(&self) -> bool {
-        self.invoke_bool("isTaanisBechoros")
-    }
-
-    fn get_day_of_chanukah(&self) -> Option<u8> {
-        let result = self.invoke_i64("getDayOfChanukah");
-        if result == -1 { None } else { Some(result as u8) }
-    }
-
-    fn is_chanukah(&self) -> bool {
-        self.invoke_bool("isChanukah")
-    }
-
-    fn is_purim(&self) -> bool {
-        self.invoke_bool("isPurim")
-    }
-
-    fn get_day_of_omer(&self) -> Option<u8> {
-        let result = self.invoke_i64("getDayOfOmer");
-        if result == -1 { None } else { Some(result as u8) }
-    }
-
-    fn is_tisha_beav(&self) -> bool {
-        self.invoke_bool("isTishaBav")
-    }
-
-    fn get_parshah(&self) -> Option<crate::constants::Parsha> {
-        self.parsha_from_java("getParshah")
-    }
-
-    fn get_daf_yomi_bavli(&self) -> Option<crate::daf::BavliDaf> {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getDafYomiBavli", InvocationArg::empty())
-            .ok()?;
-        let is_null = self
-            .jvm
-            .check_equals(
-                &java_result,
-                InvocationArg::try_from(Null::Of("com.kosherjava.zmanim.hebrewcalendar.Daf")).unwrap(),
-            )
-            .unwrap();
-        if is_null {
-            return None;
-        }
-
-        let masechta = self
-            .jvm
-            .invoke(&java_result, "getMasechtaNumber", InvocationArg::empty())
-            .ok()
-            .and_then(|m| self.jvm.to_rust::<i32>(m).ok())?;
-        let daf_index = self
-            .jvm
-            .invoke(&java_result, "getDaf", InvocationArg::empty())
-            .ok()
-            .and_then(|d| self.jvm.to_rust::<i32>(d).ok())?;
-
-        let tractate = crate::constants::BavliTractate::try_from(masechta as u8).ok()?;
-
-        Some(BavliDaf {
-            tractate,
-            daf_index: daf_index as i64,
-        })
-    }
-
-    fn get_daf_yomi_yerushalmi(&self) -> Option<crate::daf::YerushalmiDaf> {
-        let java_result = self
-            .jvm
-            .invoke(&self.instance, "getDafYomiYerushalmi", InvocationArg::empty())
-            .ok()?;
-        let is_null = self
-            .jvm
-            .check_equals(
-                &java_result,
-                InvocationArg::try_from(Null::Of("com.kosherjava.zmanim.hebrewcalendar.Daf")).unwrap(),
-            )
-            .unwrap();
-        if is_null {
-            return None;
-        }
-
-        let masechta = self
-            .jvm
-            .invoke(&java_result, "getMasechtaNumber", InvocationArg::empty())
-            .ok()
-            .and_then(|m| self.jvm.to_rust::<i32>(m).ok())?;
-
-        // The Java implementation uses 39 (No Daf Today) as a sentinel.
-        if masechta >= 39 {
-            return None;
-        }
-
-        let daf_index = self
-            .jvm
-            .invoke(&java_result, "getDaf", InvocationArg::empty())
-            .ok()
-            .and_then(|d| self.jvm.to_rust::<i32>(d).ok())?;
-
-        let tractate = crate::constants::YerushalmiTractate::try_from(masechta as i64).ok()?;
-
-        Some(YerushalmiDaf {
-            tractate,
-            daf_index: daf_index as i64,
-        })
-    }
-
-    fn is_birkas_hachamah(&self) -> bool {
-        self.invoke_bool("isBirkasHachamah")
-    }
-
-    fn is_erev_rosh_chodesh(&self) -> bool {
-        self.invoke_bool("isErevRoshChodesh")
-    }
-
-    fn is_yom_kippur_katan(&self) -> bool {
-        self.invoke_bool("isYomKippurKatan")
-    }
-
-    fn is_be_hab(&self) -> bool {
-        self.invoke_bool("isBeHaB")
-    }
-
-    fn is_machar_chodesh(&self) -> bool {
-        self.invoke_bool("isMacharChodesh")
-    }
-
-    fn is_shabbos_mevorchim(&self) -> bool {
-        self.invoke_bool("isShabbosMevorchim")
-    }
-
-    fn get_upcoming_parshah(&self) -> Option<crate::constants::Parsha> {
-        self.parsha_from_java("getUpcomingParshah")
-    }
-
-    fn get_special_shabbos(&self) -> Option<crate::constants::Parsha> {
-        self.parsha_from_java("getSpecialShabbos")
-    }
-
-    fn get_molad_as_date(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.invoke_date("getMoladAsDate")
-    }
-
-    fn get_tchilaszman_kidush_levana_3_days(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.invoke_date("getTchilasZmanKidushLevana3Days")
-    }
-
-    fn get_tchilaszman_kidush_levana_7_days(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.invoke_date("getTchilasZmanKidushLevana7Days")
-    }
-
-    fn get_sof_zman_kidush_levana_between_moldos(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.invoke_date("getSofZmanKidushLevanaBetweenMoldos")
-    }
-
-    fn get_sof_zman_kidush_levana_15_days(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.invoke_date("getSofZmanKidushLevana15Days")
-    }
-
-    fn get_tekufas_tishrei_elapsed_days(&self) -> i64 {
-        self.invoke_i64("getTekufasTishreiElapsedDays")
-    }
-
-    fn is_vesein_tal_umatar_start_date(&self) -> bool {
-        self.invoke_bool("isVeseinTalUmatarStartDate")
-    }
-
-    fn is_vesein_tal_umatar_starting_tonight(&self) -> bool {
-        self.invoke_bool("isVeseinTalUmatarStartingTonight")
-    }
-
-    fn is_vesein_tal_umatar_recited(&self) -> bool {
-        self.invoke_bool("isVeseinTalUmatarRecited")
-    }
-
-    fn is_vesein_beracha_recited(&self) -> bool {
-        self.invoke_bool("isVeseinBerachaRecited")
-    }
-
-    fn is_mashiv_haruach_start_date(&self) -> bool {
-        self.invoke_bool("isMashivHaruachStartDate")
-    }
-
-    fn is_mashiv_haruach_end_date(&self) -> bool {
-        self.invoke_bool("isMashivHaruachEndDate")
-    }
-
-    fn is_mashiv_haruach_recited(&self) -> Option<bool> {
-        Some(self.invoke_bool("isMashivHaruachRecited"))
-    }
-
-    fn is_morid_hatal_recited(&self) -> Option<bool> {
-        Some(self.invoke_bool("isMoridHatalRecited"))
-    }
-}
-
-pub struct JavaTefilaRules<'a> {
-    pub jvm: &'a Jvm,
-    pub instance: Instance,
-}
-fn bool_to_invocation_arg(bool: bool) -> InvocationArg {
-    InvocationArg::try_from(bool).unwrap().into_primitive().unwrap()
-}
-impl<'a> JavaTefilaRules<'a> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        jvm: &'a Jvm,
-        tachanun_recited_end_of_tishrei: bool,
-        tachanun_recited_week_after_shavuos: bool,
-        tachanun_recited_13_sivan_out_of_israel: bool,
-        tachanun_recited_pesach_sheni: bool,
-        tachanun_recited_15_iyar_out_of_israel: bool,
-        tachanun_recited_mincha_erev_lag_baomer: bool,
-        tachanun_recited_shivas_yemei_hamiluim: bool,
-        tachanun_recited_week_of_hod: bool,
-        tachanun_recited_week_of_purim: bool,
-        tachanun_recited_fridays: bool,
-        tachanun_recited_sundays: bool,
-        tachanun_recited_mincha_all_year: bool,
-        mizmor_lesoda_recited_erev_yom_kippur_and_pesach: bool,
-    ) -> Self {
-        let instance = jvm
-            .create_instance(
-                "com.kosherjava.zmanim.hebrewcalendar.TefilaRules",
-                InvocationArg::empty(),
-            )
-            .unwrap();
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedWeekOfPurim",
-            &[bool_to_invocation_arg(tachanun_recited_week_of_purim)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedWeekOfHod",
-            &[bool_to_invocation_arg(tachanun_recited_week_of_hod)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedEndOfTishrei",
-            &[bool_to_invocation_arg(tachanun_recited_end_of_tishrei)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedWeekAfterShavuos",
-            &[bool_to_invocation_arg(tachanun_recited_week_after_shavuos)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecited13SivanOutOfIsrael",
-            &[bool_to_invocation_arg(tachanun_recited_13_sivan_out_of_israel)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedPesachSheni",
-            &[bool_to_invocation_arg(tachanun_recited_pesach_sheni)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecited15IyarOutOfIsrael",
-            &[bool_to_invocation_arg(tachanun_recited_15_iyar_out_of_israel)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedMinchaErevLagBaomer",
-            &[bool_to_invocation_arg(tachanun_recited_mincha_erev_lag_baomer)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedShivasYemeiHamiluim",
-            &[bool_to_invocation_arg(tachanun_recited_shivas_yemei_hamiluim)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedFridays",
-            &[bool_to_invocation_arg(tachanun_recited_fridays)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedSundays",
-            &[bool_to_invocation_arg(tachanun_recited_sundays)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setTachanunRecitedMinchaAllYear",
-            &[bool_to_invocation_arg(tachanun_recited_mincha_all_year)],
-        );
-        let _ = jvm.invoke(
-            &instance,
-            "setMizmorLesodaRecitedErevYomKippurAndPesach",
-            &[bool_to_invocation_arg(mizmor_lesoda_recited_erev_yom_kippur_and_pesach)],
-        );
-        Self { jvm, instance }
-    }
+        .ok();
+    // DIFF: Java will throw an exception if it is unable to create a GeoLocation
+    // However we will return None if this is the case
+    instance.as_ref()?;
+    let instance = instance.unwrap();
+    Some(instance)
 }
