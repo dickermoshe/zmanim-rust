@@ -82,17 +82,18 @@ pub fn init_jvm() -> Jvm {
 
 #[cfg(test)]
 mod java_tests {
-    use chrono::Timelike;
+
+    use time::Time;
 
     use crate::tests::java::*;
 
     #[test]
-    fn test_zmanim_calendar_tz_aware_against_java() {
+    fn test_zmanim_calendar_against_java() {
         let jvm = init_jvm();
         let mut ran = false;
         let mut rng = rand::thread_rng();
-        for _ in 0..get_test_iterations() {
-            let test_case = create_zmanim_calendars(&jvm, &mut rng, None);
+        for i in 0..get_test_iterations() {
+            let test_case = random_zmanim_calendars(&jvm, &mut rng, None);
             if test_case.is_none() {
                 continue;
             }
@@ -117,7 +118,7 @@ mod java_tests {
             let synchronous = rng.gen_bool(0.5);
 
             let hours = rng.gen_range(-1.0..=25.0);
-
+            println!("{}", i);
             // Capture all test parameters for reproduction
             compare_zmanim_calendars(
                 &rust_calendar,
@@ -141,44 +142,70 @@ mod java_tests {
         assert!(ran, "No test cases were run");
     }
 
-    // #[test]
-    // fn test_tefila_rules_against_java() {
-    //     let jvm = init_jvm();
-    //     let mut rng = rand::thread_rng();
-    //     let mut ran = false;
-    //     for _ in 0..get_test_iterations() {
-    //         let test_case = create_jewish_calendars(&jvm, &mut rng);
-    //         if test_case.is_none() {
-    //             continue;
-    //         }
-    //         let (rust_calendar, java_calendar, message) = test_case.unwrap();
-    //         let (rust_tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm, &mut rng);
-    //         compare_tefila_rules(
-    //             &rust_tefila_rules,
-    //             &java_tefila_rules,
-    //             &rust_calendar,
-    //             &java_calendar,
-    //             &message,
-    //         );
-    //         ran = true;
-    //     }
-    //     assert!(ran, "No test cases were run");
-    // }
+    #[test]
+    fn test_1() {
+        let jvm = init_jvm();
+        let time_and_place = TimeAndPlace::new(49.60139790853522, 171.01752655220554,0.0, NaiveDate::from_ymd_opt(1986, 6, 3).unwrap(), Tz::Etc__GMTMinus11).unwrap();
 
-    // #[test]
-    // fn test_jewish_calendar_against_java() {
-    //     let jvm = init_jvm();
-    //     let mut ran = false;
-    //     let mut rng = rand::thread_rng();
-    //     for _ in 0..get_test_iterations() {
-    //         let test_case = create_jewish_calendars(&jvm, &mut rng);
-    //         if test_case.is_none() {
-    //             continue;
-    //         }
-    //         let (rust_calendar, java_calendar, message) = test_case.unwrap();
-    //         compare_jewish_calendars(&rust_calendar, &java_calendar, &message, false);
-    //         ran = true;
-    //     }
-    //     assert!(ran, "No test cases were run");
-    // }
+        let rust_calendar = ZmanimCalendar::new(
+            time_and_place.clone(),
+            false,
+            false,
+            Duration::minutes(60),
+            Duration::minutes(60),
+
+        ).unwrap();
+        let java_time_and_place = JavaTimeAndPlace::new(&jvm, &time_and_place).unwrap();
+        let java_calendar = JavaZmanimCalendar::new(&jvm, java_time_and_place,
+            Duration::minutes(60),
+            false,false,
+            Duration::minutes(60),
+        ).unwrap();
+        let j = java_calendar.get_begin_astronomical_twilight();
+        let r = rust_calendar.get_begin_astronomical_twilight();
+        let rs = rust_calendar.get_sunrise();
+
+        println!("r:{:?},j:{:?},rs{:?}",r,j,rs);
+        panic!();
+    }
 }
+// #[test]
+// fn test_tefila_rules_against_java() {
+//     let jvm = init_jvm();
+//     let mut rng = rand::thread_rng();
+//     let mut ran = false;
+//     for _ in 0..get_test_iterations() {
+//         let test_case = create_jewish_calendars(&jvm, &mut rng);
+//         if test_case.is_none() {
+//             continue;
+//         }
+//         let (rust_calendar, java_calendar, message) = test_case.unwrap();
+//         let (rust_tefila_rules, java_tefila_rules) = create_teffila_rules(&jvm, &mut rng);
+//         compare_tefila_rules(
+//             &rust_tefila_rules,
+//             &java_tefila_rules,
+//             &rust_calendar,
+//             &java_calendar,
+//             &message,
+//         );
+//         ran = true;
+//     }
+//     assert!(ran, "No test cases were run");
+// }
+
+// #[test]
+// fn test_jewish_calendar_against_java() {
+//     let jvm = init_jvm();
+//     let mut ran = false;
+//     let mut rng = rand::thread_rng();
+//     for _ in 0..get_test_iterations() {
+//         let test_case = create_jewish_calendars(&jvm, &mut rng);
+//         if test_case.is_none() {
+//             continue;
+//         }
+//         let (rust_calendar, java_calendar, message) = test_case.unwrap();
+//         compare_jewish_calendars(&rust_calendar, &java_calendar, &message, false);
+//         ran = true;
+//     }
+//     assert!(ran, "No test cases were run");
+// }

@@ -11,7 +11,7 @@ use icu_calendar::{
 };
 use solar_positioning::{Horizon, spa, time::DeltaT};
 use time::Duration as TimeDuration;
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ZmanimCalendar<Tz: TimeZone> {
     pub time_and_place: TimeAndPlace<Tz>,
     pub use_astronomical_chatzos: bool,
@@ -639,6 +639,7 @@ fn get_sunrise_offset_by_degrees<Tz: TimeZone>(
     degrees: f64,
 ) -> Option<DateTime<Tz>> {
     let angle = 90.0 - degrees;
+   
     spa::sunrise_sunset_for_horizon(
         time_and_place.date_time.clone(),
         time_and_place.latitude,

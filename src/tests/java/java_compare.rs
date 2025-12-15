@@ -40,7 +40,6 @@ pub fn compare_zmanim_calendars<'a>(
     assert_almost_equal_datetime_option(
         &rust_sunrise,
         &java_sunrise,
-        5000,
         &format!("getSunrise using {:?} ", rust_calendar),
     );
 
@@ -49,33 +48,32 @@ pub fn compare_zmanim_calendars<'a>(
     assert_almost_equal_datetime_option(
         &rust_sea_level_sunrise,
         &java_sea_level_sunrise,
-        5000,
         &format!("getSeaLevelSunrise using {:?} ", rust_calendar),
     );
 
-    // let rust_begin_civil_twilight = rust_calendar.get_begin_civil_twilight();
-    // let java_begin_civil_twilight = java_calendar.get_begin_civil_twilight();
-    // assert_almost_equal_datetime_option(
-    //     &rust_begin_civil_twilight,
-    //     &java_begin_civil_twilight,
-    //     &format!("getBeginCivilTwilight using {:?} ", rust_calendar),
-    // );
+    let rust_begin_civil_twilight = rust_calendar.get_begin_civil_twilight();
+    let java_begin_civil_twilight = java_calendar.get_begin_civil_twilight();
+    assert_almost_equal_datetime_option(
+        &rust_begin_civil_twilight,
+        &java_begin_civil_twilight,
+        &format!("getBeginCivilTwilight using {:?} ", rust_calendar),
+    );
 
-    // let rust_begin_nautical_twilight = rust_calendar.get_begin_nautical_twilight();
-    // let java_begin_nautical_twilight = java_calendar.get_begin_nautical_twilight();
-    // assert_almost_equal_datetime_option(
-    //     &rust_begin_nautical_twilight,
-    //     &java_begin_nautical_twilight,
-    //     &format!("getBeginNauticalTwilight using {:?} ", rust_calendar),
-    // );
+    let rust_begin_nautical_twilight = rust_calendar.get_begin_nautical_twilight();
+    let java_begin_nautical_twilight = java_calendar.get_begin_nautical_twilight();
+    assert_almost_equal_datetime_option(
+        &rust_begin_nautical_twilight,
+        &java_begin_nautical_twilight,
+        &format!("getBeginNauticalTwilight using {:?} ", rust_calendar),
+    );
 
-    // let rust_begin_astronomical_twilight = rust_calendar.get_begin_astronomical_twilight();
-    // let java_begin_astronomical_twilight = java_calendar.get_begin_astronomical_twilight();
-    // assert_almost_equal_datetime_option(
-    //     &rust_begin_astronomical_twilight,
-    //     &java_begin_astronomical_twilight,
-    //     &format!("getBeginAstronomicalTwilight using {:?} ", rust_calendar),
-    // );
+    let rust_begin_astronomical_twilight = rust_calendar.get_begin_astronomical_twilight();
+    let java_begin_astronomical_twilight = java_calendar.get_begin_astronomical_twilight();
+    assert_almost_equal_datetime_option(
+        &rust_begin_astronomical_twilight,
+        &java_begin_astronomical_twilight,
+        &format!("getBeginAstronomicalTwilight using {:?} ", rust_calendar),
+    );
 
     // let rust_sunset = rust_calendar.get_sunset();
     // let java_sunset = java_calendar.get_sunset();

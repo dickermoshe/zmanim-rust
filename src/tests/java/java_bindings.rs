@@ -400,7 +400,7 @@ impl<'a> ZmanimCalendarTrait<chrono_tz::Tz> for JavaZmanimCalendar<'a> {
         let java_result = self
             .jvm
             .invoke(&self.instance, "getBeginNauticalTwilight", InvocationArg::empty())
-            .ok()?;
+            .unwrap();
         self.java_date_to_rust_datetime(&java_result)
     }
 

@@ -2,7 +2,7 @@ use crate::constants::_MINUTE_MILLIS;
 use chrono::{DateTime, Duration, NaiveDate, Offset, TimeZone};
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TimeAndPlace<Tz: TimeZone> {
     pub latitude: f64,
     pub longitude: f64,
@@ -24,17 +24,11 @@ impl<Tz: TimeZone> TimeAndPlace<Tz> {
             return None;
         }
         // Try to get a valid date time for this date and timezone
-        // We will first try to get the date time for 00:00:00, however this time may not exist for some timezone
-        // transitions, so we will also try to get the date time using 12:00:00 where timezone transitions are less common.
+        // Try to get the date time for 00:00:00. This will fail on dates where a timezone transitioned at midnight.
         let date_time = date
             .and_hms_opt(0, 0, 0)
             .map(|naive_date_time| tz.from_local_datetime(&naive_date_time).single())
-            .flatten()
-            .or_else(|| {
-                date.and_hms_opt(12, 0, 0)
-                    .map(|naive_date_time| tz.from_local_datetime(&naive_date_time).single())
-                    .flatten()
-            })?;
+            .flatten()?;
         Some(Self {
             latitude,
             longitude,
@@ -43,6 +37,8 @@ impl<Tz: TimeZone> TimeAndPlace<Tz> {
         })
     }
 }
+
+
 
 pub(crate) fn get_local_mean_time_offset<Tz: TimeZone>(longitude: f64, date: &DateTime<Tz>) -> Duration {
     let longitude_offset_ms = longitude * 4.0 * _MINUTE_MILLIS as f64;
