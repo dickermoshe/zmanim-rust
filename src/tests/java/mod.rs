@@ -93,6 +93,7 @@ mod java_tests {
         let mut ran = false;
         let mut rng = rand::thread_rng();
         for i in 0..get_test_iterations() {
+            println!("Iteration {}", i);
             let test_case = random_zmanim_calendars(&jvm, &mut rng, None);
             if test_case.is_none() {
                 continue;
@@ -118,7 +119,6 @@ mod java_tests {
             let synchronous = rng.gen_bool(0.5);
 
             let hours = rng.gen_range(-1.0..=25.0);
-            println!("{}", i);
             // Capture all test parameters for reproduction
             compare_zmanim_calendars(
                 &rust_calendar,
@@ -143,30 +143,149 @@ mod java_tests {
     }
 
     #[test]
-    fn test_1() {
+    fn test_sunrise_before_day_start() {
+        // This date has it's sunrise before the day starts. We need to ensure that we are not getting the sunrise for the next day.
         let jvm = init_jvm();
-        let time_and_place = TimeAndPlace::new(49.60139790853522, 171.01752655220554,0.0, NaiveDate::from_ymd_opt(1986, 6, 3).unwrap(), Tz::Etc__GMTMinus11).unwrap();
+        let mut rng = rand::thread_rng();
 
-        let rust_calendar = ZmanimCalendar::new(
-            time_and_place.clone(),
-            false,
-            false,
-            Duration::minutes(60),
-            Duration::minutes(60),
+        for day in [1, 2, 3, 4] {
+            let time_and_place = TimeAndPlace::new(
+                49.60139790853522,
+                171.01752655220554,
+                0.0,
+                NaiveDate::from_ymd_opt(1986, 6, day).unwrap(),
+                Tz::Etc__GMTMinus11,
+            )
+            .unwrap();
 
-        ).unwrap();
-        let java_time_and_place = JavaTimeAndPlace::new(&jvm, &time_and_place).unwrap();
-        let java_calendar = JavaZmanimCalendar::new(&jvm, java_time_and_place,
-            Duration::minutes(60),
-            false,false,
-            Duration::minutes(60),
-        ).unwrap();
-        let j = java_calendar.get_begin_astronomical_twilight();
-        let r = rust_calendar.get_begin_astronomical_twilight();
-        let rs = rust_calendar.get_sunrise();
+            let rust_calendar = ZmanimCalendar::new(
+                time_and_place.clone(),
+                false,
+                false,
+                Duration::minutes(60),
+                Duration::minutes(60),
+            )
+            .unwrap();
+            let java_time_and_place = JavaTimeAndPlace::new(&jvm, &time_and_place).unwrap();
+            let java_calendar = JavaZmanimCalendar::new(
+                &jvm,
+                java_time_and_place,
+                Duration::minutes(60),
+                false,
+                false,
+                Duration::minutes(60),
+            )
+            .unwrap();
+        let hours = rng.gen_range(-1.0..=25.0);
 
-        println!("r:{:?},j:{:?},rs{:?}",r,j,rs);
-        panic!();
+        let date_time = rust_calendar.get_date_time();
+        let offset_zenith = random_zenith(&mut rng);
+        let zenith = random_zenith(&mut rng);
+
+        let (start_of_day, end_of_day) = random_before_after_datetime(&mut rng, date_time);
+
+        let degrees = rng.gen_range(-100.0..=100.0);
+        let sunset = rng.gen_bool(0.5);
+
+        let (start_of_half_day, end_of_half_day) = random_before_after_datetime(&mut rng, date_time);
+        let (start_of_day_option, end_of_day_option) = random_before_after_datetime(&mut rng, date_time);
+        let start_of_day_option = to_random_option(&mut rng, start_of_day_option);
+        let end_of_day_option = to_random_option(&mut rng, end_of_day_option);
+        let (alos, tzais) = random_before_after_datetime(&mut rng, date_time);
+        let alos = to_random_option(&mut rng, alos);
+        let tzais = to_random_option(&mut rng, tzais);
+        let synchronous = rng.gen_bool(0.5);
+        compare_zmanim_calendars(&rust_calendar,
+            java_calendar,
+            offset_zenith,
+            zenith,
+            hours,
+            &start_of_day,
+            &end_of_day,
+            degrees,
+            sunset,
+            &start_of_half_day,
+            &end_of_half_day,
+            start_of_day_option.as_ref(),
+            end_of_day_option.as_ref(),
+            synchronous,
+            alos.as_ref(),
+            tzais.as_ref(),);
+    
+
+        }
+    }
+    #[test]
+    fn test_known_location() {
+        let jvm = init_jvm();
+        let mut rng = rand::thread_rng();
+
+        // for day in [1, 2, 3, 4,25] {
+            let time_and_place = TimeAndPlace::new(
+                -10.08085961488009,
+                 58.94180768818123,
+                0.0,
+                NaiveDate::from_ymd_opt(2043, 9, 3).unwrap(),
+                Tz::Etc__GMTMinus4,
+            )
+            .unwrap();
+
+            let rust_calendar = ZmanimCalendar::new(
+                time_and_place.clone(),
+                false,
+                false,
+                Duration::minutes(60),
+                Duration::minutes(60),
+            )
+            .unwrap();
+            let java_time_and_place = JavaTimeAndPlace::new(&jvm, &time_and_place).unwrap();
+            let java_calendar = JavaZmanimCalendar::new(
+                &jvm,
+                java_time_and_place,
+                Duration::minutes(60),
+                false,
+                false,
+                Duration::minutes(60),
+            )
+            .unwrap();
+        let hours = rng.gen_range(-1.0..=25.0);
+
+        let date_time = rust_calendar.get_date_time();
+        let offset_zenith = random_zenith(&mut rng);
+        let zenith = random_zenith(&mut rng);
+
+        let (start_of_day, end_of_day) = random_before_after_datetime(&mut rng, date_time);
+
+        let degrees = rng.gen_range(-100.0..=100.0);
+        let sunset = rng.gen_bool(0.5);
+
+        let (start_of_half_day, end_of_half_day) = random_before_after_datetime(&mut rng, date_time);
+        let (start_of_day_option, end_of_day_option) = random_before_after_datetime(&mut rng, date_time);
+        let start_of_day_option = to_random_option(&mut rng, start_of_day_option);
+        let end_of_day_option = to_random_option(&mut rng, end_of_day_option);
+        let (alos, tzais) = random_before_after_datetime(&mut rng, date_time);
+        let alos = to_random_option(&mut rng, alos);
+        let tzais = to_random_option(&mut rng, tzais);
+        let synchronous = rng.gen_bool(0.5);
+        compare_zmanim_calendars(&rust_calendar,
+            java_calendar,
+            offset_zenith,
+            zenith,
+            hours,
+            &start_of_day,
+            &end_of_day,
+            degrees,
+            sunset,
+            &start_of_half_day,
+            &end_of_half_day,
+            start_of_day_option.as_ref(),
+            end_of_day_option.as_ref(),
+            synchronous,
+            alos.as_ref(),
+            tzais.as_ref(),);
+    
+
+     
     }
 }
 // #[test]

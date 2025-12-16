@@ -3,7 +3,7 @@ use crate::{
     prelude::{JewishCalendar, JewishCalendarTrait, TimeAndPlace},
 };
 
-use chrono::{DateTime, Datelike, Duration, TimeDelta, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Days, Duration, TimeDelta, TimeZone, Utc};
 use core::time::Duration as StdDuration;
 use icu_calendar::{
     options::{DateAddOptions, Overflow},
@@ -11,13 +11,14 @@ use icu_calendar::{
 };
 use solar_positioning::{Horizon, spa, time::DeltaT};
 use time::Duration as TimeDuration;
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ZmanimCalendar<Tz: TimeZone> {
     pub time_and_place: TimeAndPlace<Tz>,
     pub use_astronomical_chatzos: bool,
     pub use_astronomical_chatzos_for_other_zmanim: bool,
-    pub candle_lighting_offset: Duration,
-    pub ateret_torah_sunset_offset: Duration,
+    pub candle_lighting_offset: WrappedDuration,
+    pub ateret_torah_sunset_offset: WrappedDuration,
 }
 
 impl<Tz: TimeZone> ZmanimCalendar<Tz> {
@@ -33,8 +34,8 @@ impl<Tz: TimeZone> ZmanimCalendar<Tz> {
             time_and_place,
             use_astronomical_chatzos,
             use_astronomical_chatzos_for_other_zmanim,
-            candle_lighting_offset,
-            ateret_torah_sunset_offset,
+            candle_lighting_offset: WrappedDuration::new(candle_lighting_offset),
+            ateret_torah_sunset_offset: WrappedDuration::new(ateret_torah_sunset_offset),
         })
     }
 
@@ -421,7 +422,9 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
             }
             Zman::Tzais => astro.get_sunset_offset_by_degrees(_ZENITH_8_POINT_5),
             Zman::AlosHashachar => astro.get_sunrise_offset_by_degrees(_ZENITH_16_POINT_1),
-            Zman::Alos72 => astro.get_sunrise().map(|sunrise| sunrise - Duration::minutes(72)),
+            Zman::Alos72 => astro
+                .get_sunrise()
+                .map(|sunrise| sunrise - chrono::Duration::minutes(72)),
             Zman::Chatzos => {
                 todo!()
 
@@ -444,10 +447,10 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
                 self.get_zman(&Zman::Tzais72).as_ref(),
                 true,
             ),
-            Zman::Tzais72 => astro.get_sunset().map(|sunset| sunset + Duration::minutes(72)),
+            Zman::Tzais72 => astro.get_sunset().map(|sunset| sunset + chrono::Duration::minutes(72)),
             Zman::CandleLighting => astro
                 .get_sea_level_sunset()
-                .map(|sunset| sunset - self.candle_lighting_offset),
+                .map(|sunset| sunset - self.candle_lighting_offset.0),
             Zman::SofZmanTfilaGRA => {
                 self.get_sof_zman_tfila_from_times(&astro.get_sunrise()?, astro.get_sunset().as_ref(), true)
             }
@@ -511,11 +514,11 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
     }
 
     fn get_sunrise_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>> {
-        get_sunrise_offset_by_degrees(&self.time_and_place, offset_zenith)
+        get_event_by_degrees(&self.time_and_place, offset_zenith, SolarEvent::Sunrise)
     }
 
     fn get_sunset_offset_by_degrees(&self, offset_zenith: f64) -> Option<DateTime<Tz>> {
-        get_sunset_offset_by_degrees(&self.time_and_place, offset_zenith)
+        get_event_by_degrees(&self.time_and_place, offset_zenith, SolarEvent::Sunset)
     }
 
     fn get_temporal_hour(&self) -> Option<Duration> {
@@ -553,7 +556,7 @@ impl<Tz: TimeZone> ZmanimCalendarTrait<Tz> for ZmanimCalendar<Tz> {
 
 /// A helper function to multiply a duration by a factor.
 /// This uses a clever workaround to handle negative durations which std duration does not support.
-fn multiply_duration(core_timedelta: TimeDelta, factor: f64) -> Option<TimeDelta> {
+fn multiply_duration(core_timedelta: chrono::Duration, factor: f64) -> Option<chrono::Duration> {
     let is_timedelta_negative = core_timedelta < TimeDelta::zero();
     let factor_is_negative = factor < 0.0;
     let std_duration = core_timedelta.abs().to_std().ok()?;
@@ -568,34 +571,34 @@ fn multiply_duration(core_timedelta: TimeDelta, factor: f64) -> Option<TimeDelta
     }
 }
 
-#[cfg(feature = "defmt")]
-impl<Tz: TimeZone> defmt::Format for ZmanimCalendar<Tz, TimeAndPlace> {
-    fn format(&self, f: defmt::Formatter) {
-        defmt::write!(f, "ZmanimCalendar(date_time={:?},", self.date_time.timestamp_millis(),);
+// #[cfg(feature = "defmt")]
+// impl<Tz: TimeZone> defmt::Format for ZmanimCalendar<Tz> {
+//     fn format(&self, f: defmt::Formatter) {
+//         defmt::write!(f, "ZmanimCalendar(date_time={:?},", self.date_time.timestamp_millis(),);
 
-        let offset = self.date_time.offset().fix().local_minus_utc();
-        let (sign, offset) = if offset < 0 { ('-', -offset) } else { ('+', offset) };
-        let sec = offset.rem_euclid(60);
-        let mins = offset.div_euclid(60);
-        let min = mins.rem_euclid(60);
-        let hour = mins.div_euclid(60);
-        if sec == 0 {
-            defmt::write!(f, "offset={}{:02}:{:02},", sign, hour, min)
-        } else {
-            defmt::write!(f, "offset={}{:02}:{:02}:{:02},", sign, hour, min, sec)
-        }
+//         let offset = self.date_time.offset().fix().local_minus_utc();
+//         let (sign, offset) = if offset < 0 { ('-', -offset) } else { ('+', offset) };
+//         let sec = offset.rem_euclid(60);
+//         let mins = offset.div_euclid(60);
+//         let min = mins.rem_euclid(60);
+//         let hour = mins.div_euclid(60);
+//         if sec == 0 {
+//             defmt::write!(f, "offset={}{:02}:{:02},", sign, hour, min)
+//         } else {
+//             defmt::write!(f, "offset={}{:02}:{:02}:{:02},", sign, hour, min, sec)
+//         }
 
-        defmt::write!(
-            f,
-            "time_and_place={:?},  use_astronomical_chatzos={:?}, use_astronomical_chatzos_for_other_zmanim={:?}, candle_lighting_offset={:?}, ateret_torah_sunset_offset={:?})",
-            self.time_and_place,
-            self.use_astronomical_chatzos,
-            self.use_astronomical_chatzos_for_other_zmanim,
-            self.candle_lighting_offset.as_seconds_f64(),
-            self.ateret_torah_sunset_offset.as_seconds_f64()
-        );
-    }
-}
+//         defmt::write!(
+//             f,
+//             "time_and_place={:?},  use_astronomical_chatzos={:?}, use_astronomical_chatzos_for_other_zmanim={:?}, candle_lighting_offset={:?}, ateret_torah_sunset_offset={:?})",
+//             self.time_and_place,
+//             self.use_astronomical_chatzos,
+//             self.use_astronomical_chatzos_for_other_zmanim,
+//             self.candle_lighting_offset.as_seconds_f64(),
+//             self.ateret_torah_sunset_offset.as_seconds_f64()
+//         );
+//     }
+// }
 static EARTH_RADIUS: f64 = 6356.9;
 
 fn get_elevation_adjustment(elevation: f64) -> f64 {
@@ -604,64 +607,76 @@ fn get_elevation_adjustment(elevation: f64) -> f64 {
         .to_degrees()
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+enum SolarEvent {
+    Sunrise, Sunset, Midnight, Noon,
+}
+
 fn get_sunrise<Tz: TimeZone>(time_and_place: &TimeAndPlace<Tz>) -> Option<DateTime<Tz>> {
     let elevation_adjustment = get_elevation_adjustment(time_and_place.elevation);
-    let angle = -0.83337 - elevation_adjustment;
-    spa::sunrise_sunset_for_horizon(
-        time_and_place.date_time.clone(),
-        time_and_place.latitude,
-        time_and_place.longitude,
-        DeltaT::estimate_from_date_like(time_and_place.date_time.date_naive()).ok()?,
-        Horizon::Custom(angle),
-    )
-    .map(|result| result.sunrise().cloned())
-    .ok()
-    .flatten()
+    let angle =  elevation_adjustment +  90.83337;
+    get_event_by_degrees(time_and_place, angle, SolarEvent::Sunrise)
 }
-
 fn get_sunset<Tz: TimeZone>(time_and_place: &TimeAndPlace<Tz>) -> Option<DateTime<Tz>> {
     let elevation_adjustment = get_elevation_adjustment(time_and_place.elevation);
-    let angle = -0.83337 + elevation_adjustment;
-    spa::sunrise_sunset_for_horizon(
-        time_and_place.date_time.clone(),
-        time_and_place.latitude,
-        time_and_place.longitude,
-        DeltaT::estimate_from_date_like(time_and_place.date_time.date_naive()).ok()?,
-        Horizon::Custom(angle),
-    )
-    .map(|result| result.sunset().cloned())
-    .ok()
-    .flatten()
+    let angle =   elevation_adjustment + 90.83337 ;
+    get_event_by_degrees    (time_and_place, angle, SolarEvent::Sunset)
 }
 
-fn get_sunrise_offset_by_degrees<Tz: TimeZone>(
+fn get_event_by_degrees<Tz: TimeZone>(
     time_and_place: &TimeAndPlace<Tz>,
     degrees: f64,
+    event: SolarEvent,
 ) -> Option<DateTime<Tz>> {
-    let angle = 90.0 - degrees;
-   
-    spa::sunrise_sunset_for_horizon(
-        time_and_place.date_time.clone(),
+    let angle =   90.0 - degrees;
+    let utc_datetime = time_and_place.date_time.to_utc();
+    let mut utc_date = utc_datetime.date_naive();
+    let utc_result = spa::sunrise_sunset_utc(
+        utc_datetime.year(),
+        utc_datetime.month(),
+        utc_datetime.day(),
         time_and_place.latitude,
         time_and_place.longitude,
-        DeltaT::estimate_from_date_like(time_and_place.date_time.date_naive()).ok()?,
-        Horizon::Custom(angle),
+        DeltaT::estimate_from_date_like(utc_datetime).ok()?,
+        angle,
     )
-    .map(|result| result.sunrise().cloned())
-    .ok()
-    .flatten()
+    .ok()?;
+        // Check if a date transition has occurred, or is about to occur - this indicates the date of the event is
+		// actually not the target date, but the day prior or after
+        let local_time_hours = time_and_place.longitude / 15.0;
+        let event_hours = match event {
+            SolarEvent::Sunrise => utc_result.sunrise()?.hours(),
+            SolarEvent::Sunset => utc_result.sunset()?.hours(),
+            SolarEvent::Midnight => panic!("Midnight is not supported"),
+            SolarEvent::Noon => panic!("Noon is not supported"),
+        };
+        println!("event_hours {}", event_hours);
+
+        
+
+    let milliseconds = event_hours * 3600.0 * 1000.0;
+    let utc_with_offset = if milliseconds > 0.0 {
+        utc_date.and_hms_opt(0 as u32, 0, 0)? + Duration::milliseconds(milliseconds.abs() as i64)
+    } else {
+        utc_date.and_hms_opt(0 as u32, 0, 0)? - Duration::milliseconds(milliseconds.abs() as i64)
+    };
+    Some(time_and_place.date_time.timezone().from_utc_datetime(&utc_with_offset))
 }
 
-fn get_sunset_offset_by_degrees<Tz: TimeZone>(time_and_place: &TimeAndPlace<Tz>, degrees: f64) -> Option<DateTime<Tz>> {
-    let angle = 90.0 - degrees;
-    spa::sunrise_sunset_for_horizon(
-        time_and_place.date_time.clone(),
-        time_and_place.latitude,
-        time_and_place.longitude,
-        DeltaT::estimate_from_date_like(time_and_place.date_time.date_naive()).ok()?,
-        Horizon::Custom(angle),
-    )
-    .map(|result| result.sunset().cloned())
-    .ok()
-    .flatten()
+
+
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+struct WrappedDuration(chrono::Duration);
+impl WrappedDuration {
+    pub fn new(duration: chrono::Duration) -> Self {
+        return Self { 0: duration };
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for WrappedDuration {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(fmt, "WrappedDuration {{ seconds: {} }}", self.0.as_seconds_f64())
+    }
 }

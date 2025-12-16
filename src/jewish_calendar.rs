@@ -24,6 +24,7 @@ use crate::parshas::*;
 #[allow(unused_imports)]
 use core_maths::CoreFloat;
 
+
 #[allow(private_bounds)]
 pub trait JewishCalendarTrait {
     fn get_jewish_year(&self) -> i32;

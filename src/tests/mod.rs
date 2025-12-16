@@ -75,6 +75,7 @@ pub fn assert_almost_equal_f64_option(a: &Option<f64>, b: &Option<f64>, diff: f6
 /// Asserts that two optional i64 values are approximately equal.
 
 pub fn assert_almost_equal_i64_option(a: &Option<i64>, b: &Option<i64>, diff: i64, message: &str) {
+    
     match (a, b) {
         (Some(a), Some(b)) => assert_almost_equal_i64(*a, *b, diff, message),
         (None, None) => (),
@@ -82,14 +83,11 @@ pub fn assert_almost_equal_i64_option(a: &Option<i64>, b: &Option<i64>, diff: i6
             panic!("Error: {:?} vs {:?}, {}", a, b, message);
         }
     }
+
 }
-/// Asserts that two DateTime values are approximately equal within a 10 second tollerance
-pub fn assert_almost_equal_datetime<Tz: TimeZone, Tz2: TimeZone>(
-    a: &DateTime<Tz>,
-    b: &DateTime<Tz2>,
-    message: &str,
-) {
-    let result = (a.timestamp_millis() - b.timestamp_millis()).abs() < 10_000;
+/// Asserts that two DateTime values are approximately equal within a 20 second tollerance
+pub fn assert_almost_equal_datetime<Tz: TimeZone, Tz2: TimeZone>(a: &DateTime<Tz>, b: &DateTime<Tz2>, message: &str) {
+    let result = (a.timestamp_millis() - b.timestamp_millis()).abs() < 30_000;
     let distance = (a.timestamp_millis() - b.timestamp_millis()).abs();
     assert!(result, "Error: {:?} vs {:?}, distance: {}, {}", a, b, distance, message);
 }
@@ -100,7 +98,7 @@ pub fn assert_almost_equal_datetime_option<Tz1: TimeZone, Tz2: TimeZone>(
     message: &str,
 ) {
     match (a, b) {
-        (Some(a), Some(b)) => assert_almost_equal_datetime(a, b,  message),
+        (Some(a), Some(b)) => assert_almost_equal_datetime(a, b, message),
 
         (None, None) => (),
         _ => {

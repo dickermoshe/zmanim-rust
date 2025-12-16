@@ -1,13 +1,14 @@
 use crate::constants::_MINUTE_MILLIS;
 use chrono::{DateTime, Duration, NaiveDate, Offset, TimeZone};
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+// #[cfg_attr(feature = "defmt", derive(defmt::Format))] TODO: Add defmt formatting
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimeAndPlace<Tz: TimeZone> {
     pub latitude: f64,
     pub longitude: f64,
     pub elevation: f64,
     pub date_time: DateTime<Tz>,
+    pub naive_date_time: NaiveDate,
 }
 impl<Tz: TimeZone> TimeAndPlace<Tz> {
     pub fn new(latitude: f64, longitude: f64, elevation: f64, date: NaiveDate, tz: Tz) -> Option<Self> {
@@ -34,11 +35,10 @@ impl<Tz: TimeZone> TimeAndPlace<Tz> {
             longitude,
             elevation,
             date_time,
+            naive_date_time: date,
         })
     }
 }
-
-
 
 pub(crate) fn get_local_mean_time_offset<Tz: TimeZone>(longitude: f64, date: &DateTime<Tz>) -> Duration {
     let longitude_offset_ms = longitude * 4.0 * _MINUTE_MILLIS as f64;
