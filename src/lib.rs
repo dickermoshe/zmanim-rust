@@ -16,6 +16,7 @@ pub mod tefila_rules;
 pub mod tests;
 pub mod time_and_place;
 pub mod zmanim_calendar;
+pub mod hebrew_holiday_calendar;
 
 pub mod prelude {
     pub use crate::{
