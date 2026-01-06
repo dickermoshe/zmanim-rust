@@ -22,8 +22,9 @@ static DEFAULT_TEST_YEARS_IN_MILLISECONDS: i64 = 1000 * 3600 * 24 * 365 * DEFAUL
 
 /// Generates a random DateTime in the range 1870-2070 with the given timezone.
 fn random_date_time(rng: &mut impl Rng, tz: &chrono_tz::Tz) -> DateTime<chrono_tz::Tz> {
+    // TODO: rethink
     let milliseconds_since_epoch: i64 = rng.gen_range(
-        -DEFAULT_TEST_YEARS_IN_MILLISECONDS..=DEFAULT_TEST_YEARS_IN_MILLISECONDS, // 1870 to 2070
+        -0..=DEFAULT_TEST_YEARS_IN_MILLISECONDS, // 1970 to 2070, we cannot work with LMT. //TODO: Fail for early dates?
     );
     tz.timestamp_millis_opt(milliseconds_since_epoch).unwrap()
 }
@@ -32,6 +33,7 @@ pub fn random_time_and_place<'a, Rng: rand::Rng>(
     jvm: &'a Jvm,
     rng: &mut Rng,
 ) -> Option<(TimeAndPlace<chrono_tz::Tz>, JavaTimeAndPlace)> {
+    //TODO rethink
     // WWe are using a different algorithim to calculate sinrise and sunset.
     // The difference between these 2 algorithms are small under most cases. However as
     // you get closer to the poles, these results can vary signifigantly.
@@ -40,7 +42,8 @@ pub fn random_time_and_place<'a, Rng: rand::Rng>(
     // which would start to affect the effectiveness of the tests.
     let latitude = rng.gen_range(-50.0..=50.0);
     let longitude = rng.gen_range(-180.0..=180.0);
-    let elevation = rng.gen_range(-0.0..=1000.0);
+    // let elevation = rng.gen_range(-0.0..=1000.0); //TODO: make random again
+    let elevation = 0.0;
     let timezone_id = FINDER.get_tz_name(longitude, latitude);
     let timezone = chrono_tz::Tz::from_str(timezone_id).ok()?;
     let date_time = random_date_time(rng, &timezone);

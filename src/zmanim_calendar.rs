@@ -3,7 +3,7 @@ use crate::{
     prelude::{JewishCalendar, JewishCalendarTrait, TimeAndPlace},
 };
 
-use chrono::{DateTime, Datelike, Days, Duration, TimeDelta, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Days, Duration, TimeDelta, TimeZone, Timelike, Utc};
 use core::time::Duration as StdDuration;
 use icu_calendar::{
     options::{DateAddOptions, Overflow},
@@ -609,62 +609,101 @@ fn get_elevation_adjustment(elevation: f64) -> f64 {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 enum SolarEvent {
-    Sunrise, Sunset, Midnight, Noon,
+    Sunrise,
+    Sunset,
+    Midnight,
+    Noon,
 }
 
 fn get_sunrise<Tz: TimeZone>(time_and_place: &TimeAndPlace<Tz>) -> Option<DateTime<Tz>> {
     let elevation_adjustment = get_elevation_adjustment(time_and_place.elevation);
-    let angle =  elevation_adjustment +  90.83337;
+    let angle = elevation_adjustment + 90.83337;
+
     get_event_by_degrees(time_and_place, angle, SolarEvent::Sunrise)
 }
 fn get_sunset<Tz: TimeZone>(time_and_place: &TimeAndPlace<Tz>) -> Option<DateTime<Tz>> {
     let elevation_adjustment = get_elevation_adjustment(time_and_place.elevation);
-    let angle =   elevation_adjustment + 90.83337 ;
-    get_event_by_degrees    (time_and_place, angle, SolarEvent::Sunset)
+    let angle = elevation_adjustment + 90.83337;
+    get_event_by_degrees(time_and_place, angle, SolarEvent::Sunset)
 }
+// fn _get_event_by_degrees<Tz: TimeZone>(
+//     time_and_place: &TimeAndPlace<Tz>,
+//     degrees: f64,
+//     event: &SolarEvent,
+// ) -> Option<DateTime<Tz>> {
+//     let angle =   90.0 - degrees;
+//     let utc_datetime = time_and_place.date_time.to_utc();
+//     let utc_date = utc_datetime.date_naive();
+
+//     let utc_result = spa::sunrise_sunset_utc(
+//         utc_datetime.year(),
+//         utc_datetime.month(),
+//         utc_datetime.day(),
+//         time_and_place.latitude,
+//         time_and_place.longitude,
+//         DeltaT::estimate_from_date_like(utc_datetime).ok()?,
+//         angle,
+//     )
+//     .ok()?;
+
+//         let event_hours = match event {
+//             SolarEvent::Sunrise => utc_result.sunrise()?.hours(),
+//             SolarEvent::Sunset => utc_result.sunset()?.hours(),
+//             SolarEvent::Midnight => panic!("Midnight is not supported"),
+//             SolarEvent::Noon => panic!("Noon is not supported"),
+//         };
+//         println!("event_hours {}", event_hours);
+
+//     let milliseconds = event_hours * 3600.0 * 1000.0;
+//     let utc_with_offset = if milliseconds > 0.0 {
+//         utc_date.and_hms_opt(0 as u32, 0, 0)? + Duration::milliseconds(milliseconds.abs() as i64)
+//     } else {
+//         utc_date.and_hms_opt(0 as u32, 0, 0)? - Duration::milliseconds(milliseconds.abs() as i64)
+//     };
+//     Some(time_and_place.date_time.timezone().from_utc_datetime(&utc_with_offset))
+
+// }
 
 fn get_event_by_degrees<Tz: TimeZone>(
     time_and_place: &TimeAndPlace<Tz>,
     degrees: f64,
     event: SolarEvent,
 ) -> Option<DateTime<Tz>> {
-    let angle =   90.0 - degrees;
-    let utc_datetime = time_and_place.date_time.to_utc();
-    let mut utc_date = utc_datetime.date_naive();
-    let utc_result = spa::sunrise_sunset_utc(
-        utc_datetime.year(),
-        utc_datetime.month(),
-        utc_datetime.day(),
+    let angle = 90.0 - degrees;
+    println!("angle {:?}", angle);
+    let result = spa::sunrise_sunset_for_horizon(
+        time_and_place.date_time.clone(),
         time_and_place.latitude,
         time_and_place.longitude,
-        DeltaT::estimate_from_date_like(utc_datetime).ok()?,
-        angle,
+        DeltaT::estimate_from_date_like(time_and_place.date_time.clone()).ok()?,
+        Horizon::Custom(angle),
     )
     .ok()?;
-        // Check if a date transition has occurred, or is about to occur - this indicates the date of the event is
-		// actually not the target date, but the day prior or after
-        let local_time_hours = time_and_place.longitude / 15.0;
-        let event_hours = match event {
-            SolarEvent::Sunrise => utc_result.sunrise()?.hours(),
-            SolarEvent::Sunset => utc_result.sunset()?.hours(),
-            SolarEvent::Midnight => panic!("Midnight is not supported"),
-            SolarEvent::Noon => panic!("Noon is not supported"),
-        };
-        println!("event_hours {}", event_hours);
-
-        
-
-    let milliseconds = event_hours * 3600.0 * 1000.0;
-    let utc_with_offset = if milliseconds > 0.0 {
-        utc_date.and_hms_opt(0 as u32, 0, 0)? + Duration::milliseconds(milliseconds.abs() as i64)
-    } else {
-        utc_date.and_hms_opt(0 as u32, 0, 0)? - Duration::milliseconds(milliseconds.abs() as i64)
+    return match event {
+        SolarEvent::Sunrise => result.sunrise().cloned(),
+        SolarEvent::Sunset => result.sunset().cloned(),
+        SolarEvent::Midnight => panic!("Midnight is not supported"),
+        SolarEvent::Noon => panic!("Noon is not supported"),
     };
-    Some(time_and_place.date_time.timezone().from_utc_datetime(&utc_with_offset))
 }
 
+// let result = _get_event_by_degrees(time_and_place, degrees, &event)?;
+// println!("result {:?}", result);
+// println!("time_and_place {:?}", time_and_place.date_time);
 
-
+// // If the sunrise is on the day before the target date and the hour is before 18:00, it means that we should have applied a day offset utc_date
+// if event == SolarEvent::Sunrise
+//     && result.date_naive() < time_and_place.date_time.date_naive()
+//     && result.hour() <= 18
+// {
+//     println!("adding day 1");
+//     // Make a copy of the date time that is one day after the result
+//     let mut time_and_place_copy = time_and_place.clone();
+//     time_and_place_copy.date_time = time_and_place_copy.date_time.checked_add_days(Days::new(1))?;
+//     time_and_place_copy.naive_date_time = time_and_place_copy.naive_date_time.checked_add_days(Days::new(1))?;
+//     return _get_event_by_degrees(&time_and_place_copy, degrees, &event);
+// }
+// Some(result)
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 struct WrappedDuration(chrono::Duration);

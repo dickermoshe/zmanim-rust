@@ -14,7 +14,7 @@ defmt = ["dep:defmt"]
 core_maths = "0.1.1"
 defmt = { version = "1.0.1", optional = true }
 time = { version = "0.3.44", default-features = false }
-solar-positioning = { version = "0.4.4", default-features = false, features = [
+solar-positioning = { git = "https://github.com/klausbrunner/solarpositioning-rs", default-features = false, features = [
     "chrono",
 ] }
 

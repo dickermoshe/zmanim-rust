@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 #[cfg(feature = "std")]
 mod java;
+mod spa_tests;
 use crate::prelude::{JewishMonth, TimeAndPlace};
 use chrono::{DateTime, Datelike, Duration, TimeZone};
 use chrono_tz::Tz;
@@ -85,7 +86,7 @@ pub fn assert_almost_equal_i64_option(a: &Option<i64>, b: &Option<i64>, diff: i6
     }
 
 }
-/// Asserts that two DateTime values are approximately equal within a 20 second tollerance
+/// Asserts that two DateTime values are approximately equal within a 60 second tollerance
 pub fn assert_almost_equal_datetime<Tz: TimeZone, Tz2: TimeZone>(a: &DateTime<Tz>, b: &DateTime<Tz2>, message: &str) {
     let result = (a.timestamp_millis() - b.timestamp_millis()).abs() < 30_000;
     let distance = (a.timestamp_millis() - b.timestamp_millis()).abs();
